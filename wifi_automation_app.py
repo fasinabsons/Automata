@@ -19,6 +19,7 @@ sys.path.append('.')
 from modules.advanced_scheduler import AdvancedScheduler
 from modules.excel_generator import EnhancedExcelGenerator
 from modules.windows_service import SystemTrayApp, WindowsIntegration
+from modules.vbs_integration import VBSIntegration
 from corrected_wifi_app import CorrectedWiFiApp
 
 class WiFiAutomationApp:
@@ -28,6 +29,7 @@ class WiFiAutomationApp:
         self.logger = self._setup_logging()
         self.scheduler = AdvancedScheduler()
         self.excel_generator = EnhancedExcelGenerator()
+        self.vbs_automation = VBSIntegration()
         self.wifi_app = CorrectedWiFiApp()
         self.running = False
         
@@ -45,7 +47,7 @@ class WiFiAutomationApp:
         if not logger.handlers:
             # File handler
             log_file = log_dir / "wifi_automation.log"
-            file_handler = logging.FileHandler(log_file)
+            file_handler = logging.FileHandler(log_file, encoding='utf-8')
             file_handler.setLevel(logging.INFO)
             
             # Console handler
@@ -80,7 +82,7 @@ class WiFiAutomationApp:
             csv_dir.mkdir(parents=True, exist_ok=True)
             
             # Execute WiFi automation
-            result = self.wifi_app.execute_complete_workflow()
+            result = self.wifi_app.run_corrected_automation()
             
             if result.get("success", False):
                 files_downloaded = result.get("files_downloaded", 4)  # Default to 4 networks
@@ -114,11 +116,42 @@ class WiFiAutomationApp:
             self.logger.info(f"📏 File size: {result.get('file_size_mb', 0)} MB")
             self.logger.info(f"📝 Records: {result.get('rows_written', 0)}")
             
+            # Get Excel file path
+            excel_file_path = result.get('file_path')
+            if excel_file_path and Path(excel_file_path).exists():
+                self.logger.info("🔄 Starting VBS application automation")
+                self.logger.info("⏰ Note: VBS processing can take 5-30 minutes for import and up to 1 hour for updates")
+                
+                # Upload Excel to VBS application and generate PDF
+                vbs_result = self.vbs_automation.execute_full_vbs_workflow(str(excel_file_path))
+                
+                if vbs_result.get("success", False):
+                    self.logger.info("✅ VBS workflow completed successfully")
+                    self.logger.info(f"📤 Excel uploaded: {vbs_result.get('excel_uploaded', False)}")
+                    self.logger.info(f"📄 PDF generated: {vbs_result.get('pdf_generated', False)}")
+                    
+                    if vbs_result.get("report_path"):
+                        self.logger.info(f"📄 PDF saved to: {vbs_result.get('report_path')}")
+                    
+                    # Update result with VBS information
+                    result["vbs_upload_success"] = True
+                    result["vbs_pdf_path"] = vbs_result.get("report_path")
+                else:
+                    self.logger.error(f"❌ VBS workflow failed: {vbs_result.get('error', 'Unknown error')}")
+                    result["vbs_upload_success"] = False
+                    result["vbs_error"] = vbs_result.get("error")
+            else:
+                self.logger.warning("⚠️ Excel file not found - skipping VBS upload")
+                result["vbs_upload_success"] = False
+                result["vbs_error"] = "Excel file not found"
+            
             # Log daily summary
             self._log_daily_summary(result)
             
         except Exception as e:
             self.logger.error(f"Merge callback error: {e}")
+            result["vbs_upload_success"] = False
+            result["vbs_error"] = str(e)
     
     def _log_daily_summary(self, excel_result: Dict[str, Any]):
         """Log daily summary statistics"""
@@ -228,12 +261,15 @@ def main():
     # Manual triggers
     parser.add_argument("--trigger-morning", action="store_true", help="Manually trigger morning slot")
     parser.add_argument("--trigger-afternoon", action="store_true", help="Manually trigger afternoon slot")
+    parser.add_argument("--trigger-evening", action="store_true", help="Manually trigger evening slot")
     parser.add_argument("--trigger-merge", action="store_true", help="Manually trigger Excel merge")
     
     # Status and testing
     parser.add_argument("--status", action="store_true", help="Show application status")
     parser.add_argument("--test-excel", action="store_true", help="Test Excel generation")
     parser.add_argument("--test-scheduler", action="store_true", help="Test scheduler")
+    parser.add_argument("--test-vbs", action="store_true", help="Test VBS integration")
+    parser.add_argument("--test-vbs-upload", type=str, help="Test VBS upload with specific Excel file")
     
     # Windows service integration
     parser.add_argument("--install-service", action="store_true", help="Install Windows service")
@@ -283,6 +319,10 @@ def main():
         result = app.manual_trigger_slot("afternoon")
         print(f"Afternoon slot trigger: {result}")
         return
+    elif args.trigger_evening:
+        result = app.manual_trigger_slot("evening")
+        print(f"Evening slot trigger: {result}")
+        return
     elif args.trigger_merge:
         result = app.manual_trigger_merge()
         print(f"Merge trigger: {result}")
@@ -303,6 +343,14 @@ def main():
         from modules.advanced_scheduler import test_scheduler
         test_scheduler()
         return
+    elif args.test_vbs:
+        from modules.vbs_integration import test_vbs_integration
+        test_vbs_integration()
+        return
+    elif args.test_vbs_upload:
+        from modules.vbs_integration import test_vbs_upload
+        test_vbs_upload(args.test_vbs_upload)
+        return
     
     # Handle execution modes
     if args.console:
@@ -320,11 +368,14 @@ def main():
         print("Manual triggers:")
         print("  --trigger-morning   : Trigger morning slot")
         print("  --trigger-afternoon : Trigger afternoon slot")
+        print("  --trigger-evening   : Trigger evening slot")
         print("  --trigger-merge     : Trigger Excel merge")
         print("")
         print("Testing:")
         print("  --test-excel     : Test Excel generation")
         print("  --test-scheduler : Test scheduler")
+        print("  --test-vbs       : Test VBS integration")
+        print("  --test-vbs-upload: Test VBS upload with specific Excel file")
         print("  --status         : Show status")
         print("")
         print("Windows integration:")
