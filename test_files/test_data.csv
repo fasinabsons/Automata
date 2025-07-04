@@ -1,0 +1,4 @@
+Hostname,IP Address,MAC Address,WLAN (SSID),AP MAC,Data Rate (up),Data Rate (down)
+TestHost1,192.168.1.100,AA:BB:CC:DD:EE:FF,EHC TV,11:22:33:44:55:66,100 Mbps,50 Mbps
+TestHost2,192.168.1.101,BB:CC:DD:EE:FF:AA,EHC TV,11:22:33:44:55:66,200 Mbps,100 Mbps
+TestHost3,192.168.1.102,CC:DD:EE:FF:AA:BB,EHC-15,22:33:44:55:66:77,150 Mbps,75 Mbps

@@ -1,0 +1,1949 @@
+#!/usr/bin/env python3
+"""
+EHC Web Automation System - Complete Implementation
+Advanced web scraping for Wireless LAN data collection from WSG interface
+Features: Complete Windows integration, intelligent element detection, comprehensive error handling
+"""
+
+import os
+import sys
+import time
+import json
+import logging
+import pandas as pd
+import winreg
+import subprocess
+import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta
+from pathlib import Path
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, ElementClickInterceptedException
+import xlwt
+import schedule
+import requests
+from urllib3.exceptions import InsecureRequestWarning
+import base64
+import random
+import threading
+import queue
+import hashlib
+from webdriver_manager.chrome import ChromeDriverManager
+
+# Suppress SSL warnings for self-signed certificates
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+
+class CompleteEHCAutomationSystem:
+    def __init__(self, config_path="ehc_config.json"):
+        self.config_path = config_path
+        self.config = self.load_config()
+        self.setup_logging()
+        self.setup_directories()
+        self.driver = None
+        self.wait = None
+        self.actions = None
+        self.session_data = {}
+        
+        # Simplified login selectors based on user guidance - use first two visible input fields
+        self.login_selectors = {
+            'username': [
+                "//input[@placeholder='username']",
+                "//input[@type='text'][1]",
+                "//input[@name='username']",
+                "//input[@id='username']",
+                "//form//input[@type='text'][1]",
+                "//input[@type='text']"
+            ],
+            'password': [
+                "//input[@placeholder='password']",
+                "//input[@type='password']",
+                "//input[@name='password']",
+                "//input[@id='password']",
+                "//form//input[@type='password']"
+            ],
+            'login_button': [
+                "//button[contains(text(), 'Login')]",
+                "//input[@value='Login']",
+                "//button[@type='submit']",
+                "//input[@type='submit']",
+                "//button[contains(@class, 'login')]",
+                "//form//button",
+                "//button"
+            ]
+        }
+        
+        self.navigation_selectors = {
+            'wireless_menu': [
+                "//a[contains(text(), 'Wireless LAN')]",
+                "//div[contains(text(), 'Wireless LAN')]",
+                "//span[contains(text(), 'Wireless LAN')]",
+                "//li[contains(text(), 'Wireless')]",
+                "//a[contains(text(), 'WLAN')]",
+                "//div[contains(@class, 'menu')]//a[4]",
+                "//ul[contains(@class, 'nav')]//li[4]//a",
+                "//div[contains(@class, 'menu-item')][4]",
+                "//li[contains(@class, 'nav-item')][4]",
+                "//a[position()=4]",
+                "//div[@class='x-menu-item'][4]",
+                "//td[contains(@class, 'x-menu-item')][4]"
+            ],
+            'network_cells': [
+                "//div[contains(@class, 'x-grid-cell-inner')]//span[contains(@class, 'rks-clickable-column')][contains(text(), '{}')]",
+                "//span[contains(@class, 'rks-clickable-column')][contains(text(), '{}')]",
+                "//div[contains(@class, 'x-grid-cell-inner')][contains(text(), '{}')]",
+                "//td[contains(text(), '{}')]",
+                "//div[contains(text(), '{}')]",
+                "//span[contains(text(), '{}')]",
+                "//tr[contains(., '{}')]//td[1]",
+                "//table//td[contains(@title, '{}')]",
+                "//div[contains(@class, 'grid')]//td[contains(text(), '{}')]",
+                "//tr//td[normalize-space(text())='{}']"
+            ],
+            'clients_tab': [
+                "//span[contains(@class, 'x-tab-inner')][contains(text(), 'Clients')]",
+                "//span[@data-ref='btnInnerEl'][contains(text(), 'Clients')]",
+                "//span[contains(text(), 'Clients')]",
+                "//div[contains(text(), 'Clients')]",
+                "//a[contains(text(), 'Clients')]",
+                "//tab[contains(text(), 'Clients')]",
+                "//li[contains(text(), 'Clients')]",
+                "//div[contains(@class, 'x-tab')]//span[contains(text(), 'Clients')]",
+                "//ul[contains(@class, 'x-tab-strip')]//span[contains(text(), 'Clients')]"
+            ],
+            'download_button': [
+                "//span[contains(@class, 'x-btn-glyph')][@style*='FontAwesome']",
+                "//span[@data-ref='btnIconEl'][contains(@class, 'x-btn-glyph')]",
+                "//button[contains(@class, 'download')]",
+                "//a[contains(@class, 'download')]",
+                "//img[contains(@src, 'download')]",
+                "//button[contains(@title, 'download')]",
+                "//i[contains(@class, 'download')]/..",
+                "//span[contains(text(), 'Download')]/..",
+                "//button[contains(text(), 'Export')]",
+                "//a[contains(text(), 'Export')]",
+                "//div[contains(@class, 'x-btn')]//img[contains(@src, 'download')]",
+                "//table//img[contains(@src, 'download')]",
+                "//div[contains(@class, 'toolbar')]//img[contains(@src, 'download')]"
+            ],
+            'pagination': [
+                "//span[@data-ref='btnInnerEl'][contains(@class, 'x-btn-inner')][contains(text(), '2')]",
+                "//span[contains(@class, 'x-btn-inner-plain-toolbar-small')][contains(text(), '2')]",
+                "//button[contains(text(), '2')]",
+                "//a[contains(text(), '2')]",
+                "//span[contains(text(), '2')]",
+                "//div[contains(@class, 'pagination')]//a[contains(text(), '2')]",
+                "//ul[contains(@class, 'pagination')]//a[contains(text(), '2')]",
+                "//div[contains(@class, 'x-toolbar-paging')]//button[contains(text(), '2')]",
+                "//table[contains(@class, 'x-toolbar')]//button[contains(text(), '2')]",
+                "//div[contains(@class, 'paging')]//span[contains(text(), '2')]"
+            ]
+        }
+        
+    def load_config(self):
+        """Load configuration from JSON file or create comprehensive default"""
+        default_config = {
+            "wsg_url": "https://51.38.163.73:8443/wsg/",
+            "username": "admin",
+            "password": "AdminFlower@123",
+            "download_directory": "./downloads",
+            "output_directory": "./EHC_Data",
+            "time_slots": ["09:30", "13:00"],
+            "merge_delay_minutes": 5,
+            "networks": {
+                "page1": ["EHC TV", "EHC-15"],
+                "page2": ["Reception Hall-Mobile", "Reception Hall-TV"]
+            },
+            "excel_headers": {
+                "Hostname": "Hostname",
+                "IP Address": "IP_Address", 
+                "MAC Address": "MAC_Address",
+                "WLAN (SSID)": "Package",
+                "AP MAC": "AP_MAC",
+                "Data Rate (up)": "Upload",
+                "Data Rate (down)": "Download"
+            },
+            "retry_attempts": 3,
+            "page_timeout": 30,
+            "download_timeout": 60,
+            "element_wait_timeout": 10,
+            "implicit_wait": 5,
+            "screenshot_on_error": True,
+            "backup_selectors": True,
+            "human_like_delays": True,
+            "anti_detection": True,
+            "windows_integration": {
+                "startup_enabled": True,
+                "task_scheduler_enabled": True,
+                "service_mode": False,
+                "wake_computer": True,
+                "run_when_logged_out": True
+            },
+            "file_management": {
+                "archive_old_files": False,
+                "retention_days": 30,
+                "backup_config": True
+            },
+            "encoding_fallbacks": ["utf-8", "latin-1", "cp1252", "iso-8859-1"],
+            "csv_separators": [",", ";", "\t"],
+            "performance": {
+                "max_memory_mb": 1024,
+                "max_processing_time_minutes": 10,
+                "concurrent_downloads": False
+            }
+        }
+        
+        if os.path.exists(self.config_path):
+            try:
+                with open(self.config_path, 'r') as f:
+                    config = json.load(f)
+                # Deep merge with defaults
+                def deep_merge(default, user):
+                    for key, value in default.items():
+                        if key not in user:
+                            user[key] = value
+                        elif isinstance(value, dict) and isinstance(user[key], dict):
+                            deep_merge(value, user[key])
+                    return user
+                config = deep_merge(default_config, config)
+                return config
+            except Exception as e:
+                print(f"Error loading config: {e}. Using defaults.")
+                
+        # Save default config
+        with open(self.config_path, 'w') as f:
+            json.dump(default_config, f, indent=4)
+        return default_config
+    
+    def setup_logging(self):
+        """Setup comprehensive logging system with enhanced details"""
+        log_dir = Path(self.config["logs_directory"]) / self.get_date_folder()
+        log_dir.mkdir(parents=True, exist_ok=True)
+        
+        log_file = log_dir / f"ehc_automation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        
+        # Create custom formatter
+        formatter = logging.Formatter(
+            '%(asctime)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        
+        # File handler
+        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        file_handler.setFormatter(formatter)
+        file_handler.setLevel(logging.DEBUG)
+        
+        # Console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        console_handler.setLevel(logging.INFO)
+        
+        # Configure logger
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.DEBUG)
+        self.logger.addHandler(file_handler)
+        self.logger.addHandler(console_handler)
+        
+        self.logger.info("Complete EHC Automation System initialized")
+        self.logger.info(f"Configuration loaded: {self.config_path}")
+        self.logger.info(f"Log file: {log_file}")
+    
+    def setup_directories(self):
+        """Create comprehensive directory structure based on user requirements"""
+        date_folder = self.get_date_folder()
+        
+        # Main directories based on user requirements
+        directories = [
+            Path(self.config["output_directory"]) / date_folder,  # EHC_Data/04July2025
+            Path(self.config["merge_directory"]) / date_folder,   # EHC_Data_Merge/04July2025
+            Path(self.config["pdf_directory"]) / date_folder,     # EHC_Data_Pdf/04July2025
+            Path(self.config["logs_directory"]) / date_folder,    # EHC_Logs/04July2025
+            Path(self.config["screenshots_directory"]) / date_folder,  # EHC_Screenshots/04July2025
+            Path(self.config["download_directory"])               # downloads
+        ]
+        
+        for directory in directories:
+            directory.mkdir(parents=True, exist_ok=True)
+            
+        self.logger.info(f"Complete directory structure created for {date_folder}")
+        
+        # Backup configuration
+        if self.config.get("file_management", {}).get("backup_config", True):
+            self.backup_configuration()
+    
+    def backup_configuration(self):
+        """Backup current configuration"""
+        try:
+            backup_dir = Path(self.config["output_directory"]) / "Config_Backup"
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_file = backup_dir / f"ehc_config_backup_{timestamp}.json"
+            
+            with open(self.config_path, 'r') as src, open(backup_file, 'w') as dst:
+                dst.write(src.read())
+            
+            self.logger.info(f"Configuration backed up to: {backup_file}")
+        except Exception as e:
+            self.logger.warning(f"Failed to backup configuration: {e}")
+    
+    def get_date_folder(self):
+        """Generate date folder name in format: DDMonthYYYY"""
+        now = datetime.now()
+        month_names = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ]
+        return f"{now.day:02d}{month_names[now.month-1]}{now.year}"
+    
+    def take_screenshot(self, name="error"):
+        """Take screenshot for debugging purposes"""
+        if self.config.get("screenshot_on_error", True) and self.driver:
+            try:
+                screenshot_dir = Path(self.config["screenshots_directory"]) / self.get_date_folder()
+                screenshot_dir.mkdir(parents=True, exist_ok=True)
+                timestamp = datetime.now().strftime("%H%M%S")
+                screenshot_path = screenshot_dir / f"{name}_{timestamp}.png"
+                self.driver.save_screenshot(str(screenshot_path))
+                self.logger.info(f"Screenshot saved: {screenshot_path}")
+                return str(screenshot_path)
+            except Exception as e:
+                self.logger.error(f"Failed to take screenshot: {e}")
+        return None
+    
+    def setup_webdriver(self):
+        """Initialize Chrome WebDriver with comprehensive anti-detection settings"""
+        chrome_options = Options()
+        
+        # Configure download settings
+        download_dir = os.path.abspath(self.config["download_directory"])
+        prefs = {
+            "download.default_directory": download_dir,
+            "download.prompt_for_download": False,
+            "download.directory_upgrade": True,
+            "safebrowsing.enabled": True,
+            "profile.default_content_settings.popups": 0,
+            "profile.default_content_setting_values.automatic_downloads": 1,
+            "profile.content_settings.exceptions.automatic_downloads.*.setting": 1,
+            "profile.managed_default_content_settings.images": 2  # Block images for faster loading
+        }
+        
+        chrome_options.add_experimental_option("prefs", prefs)
+        
+        # Anti-detection measures
+        if self.config.get("anti_detection", True):
+            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            chrome_options.add_experimental_option('useAutomationExtension', False)
+            chrome_options.add_argument("--disable-web-security")
+            chrome_options.add_argument("--allow-running-insecure-content")
+            chrome_options.add_argument("--disable-features=VizDisplayCompositor")
+            
+        # SSL and certificate handling
+        chrome_options.add_argument("--ignore-certificate-errors")
+        chrome_options.add_argument("--ignore-ssl-errors")
+        chrome_options.add_argument("--ignore-certificate-errors-spki-list")
+        chrome_options.add_argument("--allow-running-insecure-content")
+        chrome_options.add_argument("--disable-extensions")
+        
+        # Performance optimizations
+        chrome_options.add_argument("--no-first-run")
+        chrome_options.add_argument("--disable-default-apps")
+        chrome_options.add_argument("--disable-popup-blocking")
+        chrome_options.add_argument("--disable-translate")
+        
+        # Enhanced user agent with realistic fingerprint
+        user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+        ]
+        chrome_options.add_argument(f"--user-agent={random.choice(user_agents)}")
+        
+        try:
+            # Use webdriver-manager for automatic ChromeDriver management
+            service = Service(ChromeDriverManager().install())
+            self.driver = webdriver.Chrome(service=service, options=chrome_options)
+            
+            # Anti-detection JavaScript execution
+            if self.config.get("anti_detection", True):
+                self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+                self.driver.execute_script("Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]})")
+                self.driver.execute_script("Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']})")
+            
+            # Set window size and position
+            self.driver.set_window_size(1920, 1080)
+            self.driver.set_window_position(0, 0)
+            self.driver.implicitly_wait(self.config.get("implicit_wait", 5))
+            
+            # Initialize wait and actions
+            self.wait = WebDriverWait(self.driver, self.config["page_timeout"])
+            self.actions = ActionChains(self.driver)
+            
+            self.logger.info("Complete WebDriver initialized successfully with anti-detection measures")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to initialize WebDriver: {e}")
+            return False
+    
+    def human_like_delay(self, min_delay=0.5, max_delay=2.0):
+        """Add human-like delays between actions"""
+        if self.config.get("human_like_delays", True):
+            delay = random.uniform(min_delay, max_delay)
+            time.sleep(delay)
+    
+    def find_element_with_fallback(self, selectors, element_name="element", timeout=None):
+        """Try multiple selectors until one works with enhanced error handling"""
+        if timeout is None:
+            timeout = self.config.get("element_wait_timeout", 10)
+            
+        wait = WebDriverWait(self.driver, timeout)
+        
+        for i, selector in enumerate(selectors):
+            try:
+                element = wait.until(EC.presence_of_element_located((By.XPATH, selector)))
+                self.logger.info(f"Found {element_name} using selector {i+1}/{len(selectors)}: {selector[:50]}...")
+                return element
+            except TimeoutException:
+                self.logger.debug(f"Selector {i+1} failed for {element_name}: {selector}")
+                continue
+            except Exception as e:
+                self.logger.debug(f"Selector {i+1} error for {element_name}: {e}")
+                continue
+        
+        self.logger.error(f"All {len(selectors)} selectors failed for {element_name}")
+        self.take_screenshot(f"failed_{element_name.replace(' ', '_')}")
+        return None
+    
+    def click_element_with_retry(self, element, element_name="element"):
+        """Click element with multiple strategies and human-like behavior"""
+        strategies = [
+            lambda: element.click(),
+            lambda: self.driver.execute_script("arguments[0].click();", element),
+            lambda: self.actions.move_to_element(element).click().perform(),
+            lambda: self.actions.move_to_element(element).pause(0.5).click().perform(),
+            lambda: element.send_keys(Keys.ENTER),
+            lambda: element.send_keys(Keys.SPACE)
+        ]
+        
+        for i, strategy in enumerate(strategies):
+            try:
+                # Scroll element into view
+                self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
+                self.human_like_delay(0.3, 0.8)
+                
+                # Highlight element briefly (for debugging)
+                if self.config.get("screenshot_on_error", True):
+                    self.driver.execute_script("arguments[0].style.border='3px solid red'", element)
+                    time.sleep(0.2)
+                    self.driver.execute_script("arguments[0].style.border=''", element)
+                
+                strategy()
+                self.logger.info(f"Successfully clicked {element_name} using strategy {i+1}")
+                self.human_like_delay(0.5, 1.5)
+                return True
+                
+            except Exception as e:
+                self.logger.debug(f"Click strategy {i+1} failed for {element_name}: {e}")
+                self.human_like_delay(0.5, 1.0)
+        
+        self.logger.error(f"All click strategies failed for {element_name}")
+        self.take_screenshot(f"click_failed_{element_name.replace(' ', '_')}")
+        return False
+    
+    def type_like_human(self, element, text, clear_first=True):
+        """Type text with human-like behavior"""
+        try:
+            if clear_first:
+                element.clear()
+                self.human_like_delay(0.2, 0.5)
+            
+            # Type character by character with random delays
+            for char in text:
+                element.send_keys(char)
+                if self.config.get("human_like_delays", True):
+                    time.sleep(random.uniform(0.05, 0.15))
+            
+            self.human_like_delay(0.3, 0.7)
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to type text: {e}")
+            return False
+    
+    def login_to_wsg(self):
+        """Bulletproof authentication based on reference implementation"""
+        try:
+            # Get credentials first
+            username = self.config["username"]
+            password = self.config["password"]
+            
+            self.logger.info("Starting bulletproof login process")
+            self.driver.get(self.config["wsg_url"])
+            
+            # Wait for page to load completely
+            time.sleep(3)
+            
+            # Take screenshot of login page
+            self.take_screenshot("login_page")
+            
+            # ENHANCED: JavaScript-based login with iframe support - FIXED credential passing
+            login_script = f"""
+            console.log('🚀 Starting bulletproof login process...');
+            
+            // Store credentials at top level to avoid scope issues
+            var USERNAME = '{username}';
+            var PASSWORD = '{password}';
+            
+            console.log('Credentials received:', {{ username: USERNAME, password: '***' }});
+            
+            function findAndFillLoginForm() {{
+                // Search in main document and all iframes
+                var documents = [document];
+                
+                // Add iframe documents
+                var iframes = document.querySelectorAll('iframe');
+                for (var i = 0; i < iframes.length; i++) {{
+                    try {{
+                        var iframeDoc = iframes[i].contentDocument || iframes[i].contentWindow.document;
+                        if (iframeDoc) {{
+                            documents.push(iframeDoc);
+                            console.log('Added iframe document', i);
+                        }}
+                    }} catch (e) {{
+                        console.log('Cannot access iframe:', e);
+                    }}
+                }}
+                
+                // Search in all documents
+                for (var docIndex = 0; docIndex < documents.length; docIndex++) {{
+                    var doc = documents[docIndex];
+                    if (!doc) continue;
+                    
+                    console.log('🔍 Searching in document', docIndex);
+                    
+                    // Multiple strategies for finding username field
+                    var usernameField = 
+                        doc.querySelector('input[placeholder="username"]') ||
+                        doc.querySelector('input[placeholder="Username"]') ||
+                        doc.querySelector('input[name*="user"]') ||
+                        doc.querySelector('input[name*="login"]') ||
+                        doc.querySelector('input[id*="user"]') ||
+                        doc.querySelector('input[id*="login"]') ||
+                        doc.querySelector('input[type="text"]:not([type="hidden"])');
+                    
+                    // Multiple strategies for finding password field
+                    var passwordField = 
+                        doc.querySelector('input[placeholder="password"]') ||
+                        doc.querySelector('input[placeholder="Password"]') ||
+                        doc.querySelector('input[type="password"]') ||
+                        doc.querySelector('input[name*="pass"]') ||
+                        doc.querySelector('input[id*="pass"]');
+                    
+                    // Multiple strategies for finding login button
+                    var loginButton = 
+                        doc.querySelector('button[type="submit"]') ||
+                        doc.querySelector('input[type="submit"]') ||
+                        doc.querySelector('button') ||
+                        doc.querySelector('.login-button') ||
+                        doc.querySelector('#login-btn') ||
+                        doc.querySelector('[value="Login"]');
+                    
+                    console.log('🔍 Found elements:', {{
+                        username: !!usernameField,
+                        password: !!passwordField,
+                        button: !!loginButton
+                    }});
+                    
+                    if (usernameField && passwordField) {{
+                        console.log('✅ Found login form in document', docIndex);
+                        
+                        // Clear existing values
+                        usernameField.value = '';
+                        passwordField.value = '';
+                        
+                        console.log('Using credentials:', {{ username: USERNAME, password: '***' }});
+                        
+                        // Focus and fill username with events
+                        usernameField.focus();
+                        usernameField.value = USERNAME;
+                        usernameField.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                        usernameField.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                        usernameField.dispatchEvent(new Event('blur', {{ bubbles: true }}));
+                        
+                        // Small delay then fill password
+                        setTimeout(function() {{
+                            passwordField.focus();
+                            passwordField.value = PASSWORD;
+                            passwordField.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            passwordField.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                            passwordField.dispatchEvent(new Event('blur', {{ bubbles: true }}));
+                            
+                            console.log('✅ Credentials filled successfully');
+                            console.log('Username field value:', usernameField.value);
+                            console.log('Password field value:', passwordField.value ? '***' : 'EMPTY');
+                            
+                            // Submit form with multiple methods
+                            setTimeout(function() {{
+                                var submitted = false;
+                                
+                                // Method 1: Click login button
+                                if (loginButton && !submitted) {{
+                                    try {{
+                                        loginButton.click();
+                                        console.log('✅ Login button clicked');
+                                        submitted = true;
+                                    }} catch (e) {{
+                                        console.log('❌ Button click failed:', e);
+                                    }}
+                                }}
+                                
+                                // Method 2: Submit form
+                                if (!submitted) {{
+                                    var form = usernameField.closest('form');
+                                    if (form) {{
+                                        try {{
+                                            form.submit();
+                                            console.log('✅ Form submitted');
+                                            submitted = true;
+                                        }} catch (e) {{
+                                            console.log('❌ Form submit failed:', e);
+                                        }}
+                                    }}
+                                }}
+                                
+                                // Method 3: Press Enter on password field
+                                if (!submitted) {{
+                                    try {{
+                                        var enterEvent = new KeyboardEvent('keydown', {{
+                                            key: 'Enter',
+                                            keyCode: 13,
+                                            which: 13,
+                                            bubbles: true
+                                        }});
+                                        passwordField.dispatchEvent(enterEvent);
+                                        console.log('✅ Enter key pressed');
+                                        submitted = true;
+                                    }} catch (e) {{
+                                        console.log('❌ Enter key failed:', e);
+                                    }}
+                                }}
+                                
+                                console.log('🚀 Login submission completed');
+                                return submitted;
+                                
+                            }}, 1000); // Wait 1 second before submitting
+                            
+                        }}, 500); // Wait 0.5 seconds before filling password
+                        
+                        return true;
+                    }}
+                }}
+                
+                console.log('❌ No valid login form found');
+                return false;
+            }}
+            
+            return findAndFillLoginForm();
+            """
+            
+            # Execute enhanced login script
+            self.logger.info(f"Executing login with username: {username}")
+            result = self.driver.execute_script(login_script)
+            
+            if result:
+                self.logger.info("JavaScript login executed successfully")
+                
+                # Wait for login to process
+                time.sleep(8)
+                
+                # Take screenshot after login attempt
+                self.take_screenshot("after_login")
+                
+                # Verify login success
+                if self._verify_login_success():
+                    self.logger.info("🎉 Bulletproof login successful!")
+                    return True
+                else:
+                    self.logger.warning("Login verification failed, trying fallback")
+                    
+                    # Check if URL changed (alternative success indicator)
+                    current_url = self.driver.current_url
+                    if current_url != self.config["wsg_url"] and 'wsg' in current_url:
+                        self.logger.info("URL changed - login successful!")
+                        return True
+            else:
+                self.logger.warning("JavaScript login returned False, trying simple approach")
+                
+                # Try simple direct approach
+                try:
+                    simple_script = f"""
+                    var inputs = document.querySelectorAll('input');
+                    var textInput = null;
+                    var passwordInput = null;
+                    
+                    for (var i = 0; i < inputs.length; i++) {{
+                        if (inputs[i].type === 'text' || inputs[i].type === '' || inputs[i].placeholder === 'username') {{
+                            textInput = inputs[i];
+                        }}
+                        if (inputs[i].type === 'password' || inputs[i].placeholder === 'password') {{
+                            passwordInput = inputs[i];
+                        }}
+                    }}
+                    
+                    if (textInput && passwordInput) {{
+                        textInput.value = '{username}';
+                        passwordInput.value = '{password}';
+                        
+                        var button = document.querySelector('button') || document.querySelector('input[type="submit"]');
+                        if (button) {{
+                            button.click();
+                            return true;
+                        }}
+                    }}
+                    return false;
+                    """
+                    
+                    simple_result = self.driver.execute_script(simple_script)
+                    if simple_result:
+                        self.logger.info("Simple login approach succeeded")
+                        time.sleep(5)
+                        if self._verify_login_success():
+                            return True
+                            
+                except Exception as e:
+                    self.logger.error(f"Simple login approach failed: {e}")
+            
+            # Fallback: Try direct element interaction
+            self.logger.info("Trying fallback login method")
+            return self._fallback_login()
+            
+        except Exception as e:
+            self.logger.error(f"Bulletproof login failed: {e}")
+            return False
+    
+    def _verify_login_success(self):
+        """Verify login success with comprehensive checks"""
+        try:
+            current_url = self.driver.current_url
+            page_source = self.driver.page_source.lower()
+            
+            # Success indicators based on Ruckus interface
+            success_indicators = [
+                current_url != self.config["wsg_url"],  # URL changed
+                'wireless' in page_source,
+                'dashboard' in page_source,
+                'menu' in page_source,
+                'logout' in page_source,
+                'admin' in page_source,
+                'configuration' in page_source,
+                'monitoring' in page_source,
+                'ruckus' in page_source
+            ]
+            
+            # Failure indicators
+            failure_indicators = [
+                'login failed' in page_source,
+                'invalid credentials' in page_source,
+                'authentication failed' in page_source,
+                'username' in page_source and 'password' in page_source and 'login' in page_source
+            ]
+            
+            success_count = sum(success_indicators)
+            failure_count = sum(failure_indicators)
+            
+            self.logger.info(f"Login verification - Success: {success_count}, Failure: {failure_count}")
+            
+            if success_count >= 2 and failure_count == 0:
+                return True
+            elif success_count >= 1 and failure_count == 0:
+                # Check for specific Ruckus elements
+                try:
+                    wireless_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), 'Wireless') or contains(text(), 'WLAN') or contains(text(), 'Dashboard')]")
+                    return len(wireless_elements) > 0
+                except:
+                    return False
+            else:
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Login verification error: {e}")
+            return False
+    
+    def _fallback_login(self):
+        """Fallback login method using direct element interaction"""
+        try:
+            self.logger.info("Attempting fallback login")
+            
+            # Wait for form elements
+            wait = WebDriverWait(self.driver, 20)
+            
+            # Find username field with multiple strategies
+            username_field = None
+            username_strategies = [
+                (By.XPATH, "//input[@placeholder='username']"),
+                (By.XPATH, "//input[@placeholder='Username']"),
+                (By.XPATH, "//input[contains(@name, 'user')]"),
+                (By.XPATH, "//input[@type='text']"),
+                (By.CSS_SELECTOR, "input[type='text']")
+            ]
+            
+            for strategy in username_strategies:
+                try:
+                    username_field = wait.until(EC.presence_of_element_located(strategy))
+                    if username_field.is_displayed() and username_field.is_enabled():
+                        self.logger.info(f"Found username field with strategy: {strategy}")
+                        break
+                except:
+                    continue
+            
+            if not username_field:
+                self.logger.error("Username field not found")
+                return False
+            
+            # Find password field
+            password_field = None
+            password_strategies = [
+                (By.XPATH, "//input[@placeholder='password']"),
+                (By.XPATH, "//input[@placeholder='Password']"),
+                (By.XPATH, "//input[@type='password']"),
+                (By.XPATH, "//input[contains(@name, 'pass')]")
+            ]
+            
+            for strategy in password_strategies:
+                try:
+                    password_field = self.driver.find_element(*strategy)
+                    if password_field.is_displayed() and password_field.is_enabled():
+                        self.logger.info(f"Found password field with strategy: {strategy}")
+                        break
+                except:
+                    continue
+            
+            if not password_field:
+                self.logger.error("Password field not found")
+                return False
+            
+            # Clear and fill fields
+            username_field.clear()
+            username_field.send_keys(self.config["username"])
+            time.sleep(0.5)
+            
+            password_field.clear()
+            password_field.send_keys(self.config["password"])
+            time.sleep(0.5)
+            
+            # Find and click login button
+            button_strategies = [
+                (By.XPATH, "//button[contains(text(), 'Login')]"),
+                (By.XPATH, "//input[@type='submit']"),
+                (By.XPATH, "//button[@type='submit']"),
+                (By.XPATH, "//button[contains(@class, 'login')]"),
+                (By.CSS_SELECTOR, "button")
+            ]
+            
+            login_clicked = False
+            for strategy in button_strategies:
+                try:
+                    login_button = self.driver.find_element(*strategy)
+                    if login_button.is_displayed() and login_button.is_enabled():
+                        login_button.click()
+                        login_clicked = True
+                        self.logger.info(f"Clicked login button with strategy: {strategy}")
+                        break
+                except:
+                    continue
+            
+            if not login_clicked:
+                # If no button found, press Enter
+                password_field.send_keys(Keys.RETURN)
+                self.logger.info("Pressed Enter on password field")
+            
+            # Wait for response
+            time.sleep(5)
+            
+            # Verify login
+            return self._verify_login_success()
+            
+        except Exception as e:
+            self.logger.error(f"Fallback login failed: {e}")
+            return False
+            
+            # Enter credentials with human-like typing
+            self.logger.info("Entering username")
+            if not self.type_like_human(username_field, self.config["username"]):
+                return False
+            
+            self.logger.info("Entering password")
+            if not self.type_like_human(password_field, self.config["password"]):
+                return False
+            
+            # Find and click login button
+            login_button = self.find_element_with_fallback(
+                self.login_selectors['login_button'], 
+                "login button"
+            )
+            if not login_button:
+                return False
+            
+            # Take screenshot before login
+            self.take_screenshot("before_login")
+            
+            self.logger.info("Clicking login button")
+            if not self.click_element_with_retry(login_button, "login button"):
+                return False
+            
+            # Wait for login to complete with multiple verification strategies
+            login_success = False
+            verification_strategies = [
+                # Strategy 1: URL change
+                lambda: self.wait.until(lambda driver: self.config["wsg_url"] not in driver.current_url),
+                # Strategy 2: Dashboard elements
+                lambda: self.wait.until(EC.presence_of_element_located((By.XPATH, "//div[contains(@class, 'dashboard')] | //div[contains(@class, 'main')] | //div[contains(@class, 'content')] | //div[contains(@class, 'x-panel')]"))),
+                # Strategy 3: Menu elements
+                lambda: self.wait.until(EC.presence_of_element_located((By.XPATH, "//div[contains(@class, 'menu')] | //ul[contains(@class, 'nav')] | //div[contains(@class, 'x-menu')]"))),
+            ]
+            
+            for i, strategy in enumerate(verification_strategies):
+                try:
+                    strategy()
+                    login_success = True
+                    self.logger.info(f"Login verified using strategy {i+1}")
+                    break
+                except TimeoutException:
+                    self.logger.debug(f"Login verification strategy {i+1} failed")
+                    continue
+            
+            # Fallback: wait and check for error messages
+            if not login_success:
+                self.human_like_delay(3, 5)
+                error_elements = self.driver.find_elements(By.XPATH, "//div[contains(@class, 'error')] | //span[contains(@class, 'error')] | //div[contains(text(), 'Invalid')] | //div[contains(text(), 'Error')]")
+                if not error_elements:
+                    login_success = True
+                    self.logger.info("Login assumed successful (no error messages found)")
+            
+            if login_success:
+                self.logger.info("Successfully logged into WSG interface")
+                self.take_screenshot("after_login")
+                
+                # Store session information
+                self.session_data = {
+                    'login_time': datetime.now(),
+                    'current_url': self.driver.current_url,
+                    'session_cookies': self.driver.get_cookies()
+                }
+                
+                return True
+            else:
+                self.logger.error("Login verification failed")
+                self.take_screenshot("login_failed")
+                return False
+            
+        except Exception as e:
+            self.logger.error(f"Login failed with exception: {e}")
+            self.take_screenshot("login_exception")
+            return False
+    
+    def navigate_to_wireless_lans(self):
+        """Enhanced navigation with intelligent menu detection"""
+        try:
+            self.logger.info("Navigating to Wireless LANs section")
+            
+            # Wait for page to stabilize
+            self.human_like_delay(2, 4)
+            
+            # Take screenshot of main page
+            self.take_screenshot("main_page")
+            
+            # Strategy 1: Direct text search
+            wireless_menu = self.find_element_with_fallback(
+                self.navigation_selectors['wireless_menu'],
+                "wireless LANs menu"
+            )
+            
+            # Strategy 2: Position-based fallback
+            if not wireless_menu:
+                self.logger.info("Trying position-based menu selection")
+                try:
+                    # Look for menu containers
+                    menu_containers = [
+                        "//div[contains(@class, 'menu')]//a",
+                        "//ul[contains(@class, 'nav')]//a",
+                        "//div[contains(@class, 'x-menu')]//div",
+                        "//table[contains(@class, 'x-menu')]//td",
+                        "//div[contains(@class, 'toolbar')]//div"
+                    ]
+                    
+                    for container_xpath in menu_containers:
+                        try:
+                            menu_items = self.driver.find_elements(By.XPATH, container_xpath)
+                            if len(menu_items) >= 4:
+                                wireless_menu = menu_items[3]  # 4th item (0-indexed)
+                                self.logger.info(f"Using positional fallback (4th item) from container: {container_xpath}")
+                                break
+                        except:
+                            continue
+                            
+                except Exception as e:
+                    self.logger.debug(f"Position-based selection failed: {e}")
+            
+            # Strategy 3: Text content search in all clickable elements
+            if not wireless_menu:
+                self.logger.info("Trying comprehensive text search")
+                try:
+                    all_clickable = self.driver.find_elements(By.XPATH, "//a | //div[@onclick] | //span[@onclick] | //td[@onclick] | //button")
+                    for element in all_clickable:
+                        try:
+                            text = element.text.lower()
+                            if 'wireless' in text and ('lan' in text or 'wlan' in text):
+                                wireless_menu = element
+                                self.logger.info(f"Found wireless menu by text search: {element.text}")
+                                break
+                        except:
+                            continue
+                except Exception as e:
+                    self.logger.debug(f"Text search failed: {e}")
+            
+            if wireless_menu:
+                # Scroll to element and click
+                self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", wireless_menu)
+                self.human_like_delay(1, 2)
+                
+                if self.click_element_with_retry(wireless_menu, "wireless LANs menu"):
+                    # Wait for page load with multiple indicators
+                    page_loaded = False
+                    load_indicators = [
+                        "//div[contains(@class, 'x-grid')] | //table[contains(@class, 'grid')] | //div[contains(@class, 'data-grid')]",
+                        "//td[contains(text(), 'EHC')] | //div[contains(text(), 'EHC')]",
+                        "//div[contains(@class, 'x-panel-body')] | //div[contains(@class, 'content')]"
+                    ]
+                    
+                    for indicator in load_indicators:
+                        try:
+                            WebDriverWait(self.driver, 10).until(
+                                EC.presence_of_element_located((By.XPATH, indicator))
+                            )
+                            page_loaded = True
+                            break
+                        except:
+                            continue
+                    
+                    if not page_loaded:
+                        self.human_like_delay(3, 5)  # Fallback wait
+                    
+                    self.logger.info("Successfully navigated to Wireless LANs")
+                    self.take_screenshot("wireless_lans_page")
+                    return True
+            
+            self.logger.error("Could not find or click Wireless LANs menu")
+            self.take_screenshot("navigation_failed")
+            return False
+                
+        except Exception as e:
+            self.logger.error(f"Navigation to Wireless LANs failed: {e}")
+            self.take_screenshot("navigation_exception")
+            return False
+    
+    def download_network_data(self, network_name, needs_clients_tab=False):
+        """Enhanced network data download with comprehensive error handling"""
+        try:
+            self.logger.info(f"Processing network: {network_name}")
+            
+            # Find network cell with enhanced search
+            network_selectors = [selector.format(network_name) for selector in self.navigation_selectors['network_cells']]
+            
+            # Add fuzzy matching selectors
+            network_selectors.extend([
+                f"//td[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{network_name.lower()}')]",
+                f"//div[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{network_name.lower()}')]",
+                f"//span[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{network_name.lower()}')]"
+            ])
+            
+            network_cell = self.find_element_with_fallback(network_selectors, f"network cell for {network_name}")
+            
+            if not network_cell:
+                # Try partial matching
+                self.logger.warning(f"Exact match failed for {network_name}, trying partial matching")
+                partial_selectors = [
+                    f"//td[contains(text(), '{network_name.split()[0]}')]",
+                    f"//div[contains(text(), '{network_name.split()[0]}')]",
+                    f"//td[contains(text(), '{network_name.split()[-1]}')]"
+                ]
+                network_cell = self.find_element_with_fallback(partial_selectors, f"network cell (partial) for {network_name}")
+            
+            if not network_cell:
+                return None
+            
+            # Scroll to and click network cell
+            self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", network_cell)
+            self.human_like_delay(1, 2)
+            
+            if not self.click_element_with_retry(network_cell, f"network cell for {network_name}"):
+                return None
+            
+            self.human_like_delay(2, 3)
+            
+            # Navigate to Clients tab if needed
+            if needs_clients_tab:
+                self.logger.info(f"Looking for Clients tab for {network_name}")
+                clients_tab = self.find_element_with_fallback(
+                    self.navigation_selectors['clients_tab'],
+                    "clients tab"
+                )
+                if clients_tab:
+                    if self.click_element_with_retry(clients_tab, "clients tab"):
+                        self.human_like_delay(2, 3)
+                        self.logger.info("Successfully navigated to Clients tab")
+                    else:
+                        self.logger.warning(f"Could not click clients tab for {network_name}")
+                else:
+                    self.logger.warning(f"Could not find clients tab for {network_name}")
+            
+            # Find download button with enhanced search
+            download_button = self.find_element_with_fallback(
+                self.navigation_selectors['download_button'],
+                "download button"
+            )
+            
+            if not download_button:
+                # Try alternative download methods
+                self.logger.warning("Standard download button not found, trying alternatives")
+                alt_selectors = [
+                    "//img[contains(@class, 'icon') and contains(@src, 'export')]",
+                    "//div[contains(@class, 'button') and contains(@title, 'export')]",
+                    "//a[contains(@href, 'export') or contains(@href, 'download')]",
+                    "//button[contains(@onclick, 'export') or contains(@onclick, 'download')]"
+                ]
+                download_button = self.find_element_with_fallback(alt_selectors, "alternative download button")
+            
+            if not download_button:
+                return None
+            
+            # Track files before download
+            files_before = set()
+            try:
+                files_before = set(os.listdir(self.config["download_directory"]))
+            except Exception as e:
+                self.logger.warning(f"Could not list download directory: {e}")
+            
+            # Scroll to download button and click
+            self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", download_button)
+            self.human_like_delay(1, 2)
+            
+            self.logger.info(f"Clicking download button for {network_name}")
+            if not self.click_element_with_retry(download_button, "download button"):
+                return None
+            
+            # Enhanced file download detection with progress monitoring
+            timeout = time.time() + self.config["download_timeout"]
+            download_started = False
+            
+            while time.time() < timeout:
+                try:
+                    current_files = set(os.listdir(self.config["download_directory"]))
+                    new_files = current_files - files_before
+                    
+                    # Check for download in progress
+                    for file in current_files:
+                        if file.endswith(('.crdownload', '.tmp', '.part')):
+                            if not download_started:
+                                self.logger.info(f"Download started for {network_name}")
+                                download_started = True
+                    
+                    # Check for completed downloads
+                    if new_files:
+                        for new_file in new_files:
+                            if not new_file.endswith(('.crdownload', '.tmp', '.part')):
+                                # Verify file is complete and not empty
+                                file_path = Path(self.config["download_directory"]) / new_file
+                                if file_path.exists() and file_path.stat().st_size > 0:
+                                    # Additional validation: check if it's a valid CSV
+                                    try:
+                                        with open(file_path, 'r', encoding='utf-8') as f:
+                                            first_line = f.readline()
+                                            if ',' in first_line or ';' in first_line or '\t' in first_line:
+                                                self.logger.info(f"Successfully downloaded and validated: {new_file}")
+                                                return new_file
+                                    except:
+                                        # Try other encodings
+                                        for encoding in ['latin-1', 'cp1252']:
+                                            try:
+                                                with open(file_path, 'r', encoding=encoding) as f:
+                                                    first_line = f.readline()
+                                                    if ',' in first_line or ';' in first_line or '\t' in first_line:
+                                                        self.logger.info(f"Successfully downloaded: {new_file} (encoding: {encoding})")
+                                                        return new_file
+                                                break
+                                            except:
+                                                continue
+                    
+                    time.sleep(1)
+                    
+                except Exception as e:
+                    self.logger.debug(f"Error checking download status: {e}")
+                    time.sleep(1)
+            
+            self.logger.warning(f"Download timeout for {network_name}")
+            self.take_screenshot(f"download_timeout_{network_name.replace(' ', '_')}")
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Failed to download {network_name}: {e}")
+            self.take_screenshot(f"download_failed_{network_name.replace(' ', '_')}")
+            return None
+    
+    def process_page_data(self, page_num):
+        """Enhanced page processing with comprehensive error handling"""
+        downloaded_files = []
+        
+        try:
+            self.logger.info(f"Processing page {page_num}")
+            
+            if page_num == 2:
+                # Navigate to page 2 with multiple strategies
+                self.logger.info("Navigating to page 2")
+                page2_button = self.find_element_with_fallback(
+                    self.navigation_selectors['pagination'],
+                    "page 2 button"
+                )
+                
+                if page2_button:
+                    if self.click_element_with_retry(page2_button, "page 2 button"):
+                        self.human_like_delay(3, 5)
+                        self.take_screenshot("page_2")
+                        self.logger.info("Successfully navigated to page 2")
+                    else:
+                        self.logger.error("Failed to navigate to page 2")
+                        return downloaded_files
+                else:
+                    self.logger.error("Could not find page 2 button")
+                    return downloaded_files
+            
+            networks = self.config["networks"][f"page{page_num}"]
+            
+            for i, network in enumerate(networks):
+                self.logger.info(f"Processing network {i+1}/{len(networks)}: {network}")
+                
+                # Determine if Clients tab is needed based on configuration
+                needs_clients = network in ["EHC TV", "Reception Hall-Mobile"]
+                
+                # Retry mechanism for each network
+                file_name = None
+                for attempt in range(self.config.get("retry_attempts", 3)):
+                    try:
+                        self.logger.info(f"Attempt {attempt + 1} for {network}")
+                        file_name = self.download_network_data(network, needs_clients)
+                        if file_name:
+                            downloaded_files.append(file_name)
+                            break
+                        else:
+                            self.logger.warning(f"Attempt {attempt + 1} failed for {network}")
+                            if attempt < self.config.get("retry_attempts", 3) - 1:
+                                # Wait before retry and try to refresh the page
+                                self.human_like_delay(2, 4)
+                                if attempt == 1:  # Refresh on second attempt
+                                    self.logger.info("Refreshing page before retry")
+                                    self.driver.refresh()
+                                    self.human_like_delay(3, 5)
+                                    
+                    except Exception as e:
+                        self.logger.error(f"Attempt {attempt + 1} exception for {network}: {e}")
+                        if attempt < self.config.get("retry_attempts", 3) - 1:
+                            self.human_like_delay(2, 4)
+                
+                if not file_name:
+                    self.logger.error(f"All attempts failed for {network}")
+                
+                # Delay between networks
+                self.human_like_delay(1, 3)
+            
+            success_rate = len(downloaded_files) / len(networks) * 100
+            self.logger.info(f"Page {page_num} processing complete. Downloaded {len(downloaded_files)}/{len(networks)} files ({success_rate:.1f}% success rate)")
+            return downloaded_files
+            
+        except Exception as e:
+            self.logger.error(f"Failed to process page {page_num}: {e}")
+            self.take_screenshot(f"page_{page_num}_failed")
+            return downloaded_files
+    
+    def run_data_collection(self):
+        """Enhanced data collection workflow with comprehensive monitoring"""
+        start_time = datetime.now()
+        try:
+            timestamp = start_time.strftime("%H%M")
+            self.logger.info(f"Starting complete data collection for time slot: {timestamp}")
+            
+            # Performance monitoring
+            max_time = self.config["performance"]["max_processing_time_minutes"] * 60
+            
+            if not self.setup_webdriver():
+                return False
+            
+            if not self.login_to_wsg():
+                return False
+            
+            if not self.navigate_to_wireless_lans():
+                return False
+            
+            all_files = []
+            
+            # Process page 1
+            self.logger.info("Processing page 1 networks")
+            page1_files = self.process_page_data(1)
+            all_files.extend(page1_files)
+            
+            # Check time limit
+            if (datetime.now() - start_time).seconds > max_time:
+                self.logger.warning("Processing time limit exceeded, stopping")
+                return len(all_files) > 0
+            
+            # Process page 2
+            self.logger.info("Processing page 2 networks")
+            page2_files = self.process_page_data(2)
+            all_files.extend(page2_files)
+            
+            # Move files to organized folders
+            self.organize_downloaded_files(all_files, timestamp)
+            
+            # Calculate metrics
+            total_expected = sum(len(networks) for networks in self.config["networks"].values())
+            success_rate = len(all_files) / total_expected * 100 if total_expected > 0 else 0
+            processing_time = (datetime.now() - start_time).seconds
+            
+            self.logger.info(f"Data collection complete in {processing_time}s. Downloaded {len(all_files)}/{total_expected} files ({success_rate:.1f}% success rate)")
+            
+            # Success criteria: at least 75% of files downloaded
+            return success_rate >= 75
+            
+        except Exception as e:
+            self.logger.error(f"Data collection failed: {e}")
+            self.take_screenshot("collection_failed")
+            return False
+        finally:
+            if self.driver:
+                try:
+                    self.driver.quit()
+                    self.logger.info("WebDriver session closed")
+                except:
+                    pass
+    
+    def organize_downloaded_files(self, file_list, timestamp):
+        """Enhanced file organization with comprehensive validation"""
+        source_dir = Path(self.config["download_directory"])
+        dest_dir = Path(self.config["output_directory"]) / "CSV_Files" / self.get_date_folder()
+        
+        organized_count = 0
+        
+        for file_name in file_list:
+            source_file = source_dir / file_name
+            if source_file.exists():
+                # Validate file is not empty and is valid CSV
+                try:
+                    file_size = source_file.stat().st_size
+                    if file_size == 0:
+                        self.logger.warning(f"Skipping empty file: {file_name}")
+                        continue
+                    
+                    # Quick CSV validation
+                    valid_csv = False
+                    for encoding in self.config["encoding_fallbacks"]:
+                        try:
+                            with open(source_file, 'r', encoding=encoding) as f:
+                                first_line = f.readline()
+                                if any(sep in first_line for sep in self.config["csv_separators"]):
+                                    valid_csv = True
+                                    break
+                        except:
+                            continue
+                    
+                    if not valid_csv:
+                        self.logger.warning(f"File does not appear to be valid CSV: {file_name}")
+                        continue
+                    
+                    # Create timestamped filename
+                    name_parts = file_name.rsplit('.', 1)
+                    if len(name_parts) == 2:
+                        new_name = f"{name_parts[0]}_{timestamp}.{name_parts[1]}"
+                    else:
+                        new_name = f"{file_name}_{timestamp}"
+                    
+                    dest_file = dest_dir / new_name
+                    
+                    # Move file
+                    source_file.rename(dest_file)
+                    organized_count += 1
+                    self.logger.info(f"Moved {file_name} to {dest_file} (size: {file_size} bytes)")
+                    
+                except Exception as e:
+                    self.logger.error(f"Failed to move {file_name}: {e}")
+            else:
+                self.logger.warning(f"Source file not found: {file_name}")
+        
+        self.logger.info(f"Successfully organized {organized_count}/{len(file_list)} files")
+    
+    def merge_and_create_excel(self):
+        """Enhanced merge and Excel creation with comprehensive data processing"""
+        try:
+            start_time = datetime.now()
+            self.logger.info("Starting comprehensive merge and Excel creation process")
+            
+            csv_dir = Path(self.config["output_directory"]) / "CSV_Files" / self.get_date_folder()
+            merged_dir = Path(self.config["output_directory"]) / "Merged_Files" / self.get_date_folder()
+            
+            # Find all CSV files for today
+            csv_files = list(csv_dir.glob("*.csv"))
+            
+            if not csv_files:
+                self.logger.warning("No CSV files found for merging")
+                return False
+            
+            self.logger.info(f"Found {len(csv_files)} CSV files to merge")
+            
+            # Read and combine all CSV files with enhanced error handling
+            all_data = []
+            total_rows = 0
+            
+            for csv_file in csv_files:
+                self.logger.info(f"Processing file: {csv_file.name}")
+                df = None
+                
+                # Try different encodings and separators
+                for encoding in self.config["encoding_fallbacks"]:
+                    for separator in self.config["csv_separators"]:
+                        try:
+                            df = pd.read_csv(csv_file, encoding=encoding, sep=separator)
+                            if len(df.columns) >= 3:  # Minimum expected columns
+                                self.logger.info(f"Successfully loaded {len(df)} rows from {csv_file.name} (encoding: {encoding}, separator: '{separator}')")
+                                all_data.append(df)
+                                total_rows += len(df)
+                                break
+                        except Exception as e:
+                            self.logger.debug(f"Failed to read {csv_file.name} with encoding {encoding} and separator '{separator}': {e}")
+                            continue
+                    if df is not None:
+                        break
+                
+                if df is None:
+                    self.logger.error(f"Could not read {csv_file.name} with any encoding/separator combination")
+            
+            if not all_data:
+                self.logger.error("No valid CSV data found")
+                return False
+            
+            self.logger.info(f"Total rows loaded: {total_rows}")
+            
+            # Combine all dataframes
+            combined_df = pd.concat(all_data, ignore_index=True)
+            self.logger.info(f"Combined dataframe shape: {combined_df.shape}")
+            
+            # Enhanced data cleaning
+            original_count = len(combined_df)
+            
+            # Remove completely empty rows
+            combined_df = combined_df.dropna(how='all')
+            
+            # Remove duplicates based on MAC Address if column exists
+            mac_columns = [col for col in combined_df.columns if 'mac' in col.lower() and 'address' in col.lower()]
+            if mac_columns:
+                mac_column = mac_columns[0]
+                before_dedup = len(combined_df)
+                combined_df = combined_df.drop_duplicates(subset=[mac_column], keep='first')
+                after_dedup = len(combined_df)
+                self.logger.info(f"Removed {before_dedup - after_dedup} duplicate entries based on {mac_column}")
+            
+            # Clean data - remove rows where all important columns are empty
+            important_columns = ['Hostname', 'IP Address', 'MAC Address']
+            existing_important = [col for col in important_columns if col in combined_df.columns]
+            if existing_important:
+                combined_df = combined_df.dropna(subset=existing_important, how='all')
+            
+            final_count = len(combined_df)
+            self.logger.info(f"Data cleaning complete: {original_count} → {final_count} rows")
+            
+            # Create Excel file with enhanced formatting
+            excel_filename = f"EHC_Upload_Mac_{datetime.now().strftime('%d%m%Y')}.xls"
+            excel_path = merged_dir / excel_filename
+            
+            # Create Excel workbook using xlwt with professional styling
+            workbook = xlwt.Workbook()
+            worksheet = workbook.add_sheet('EHC_Data')
+            
+            # Define comprehensive styles
+            # Header style
+            header_style = xlwt.XFStyle()
+            header_font = xlwt.Font()
+            header_font.bold = True
+            header_font.name = 'Arial'
+            header_font.height = 220  # 11pt
+            header_style.font = header_font
+            
+            # Header background
+            header_pattern = xlwt.Pattern()
+            header_pattern.pattern = xlwt.Pattern.SOLID_PATTERN
+            header_pattern.pattern_fore_colour = xlwt.Style.colour_map['ice_blue']
+            header_style.pattern = header_pattern
+            
+            # Borders for header
+            header_borders = xlwt.Borders()
+            header_borders.left = xlwt.Borders.THIN
+            header_borders.right = xlwt.Borders.THIN
+            header_borders.top = xlwt.Borders.THIN
+            header_borders.bottom = xlwt.Borders.THIN
+            header_style.borders = header_borders
+            
+            # Data style
+            data_style = xlwt.XFStyle()
+            data_font = xlwt.Font()
+            data_font.name = 'Arial'
+            data_font.height = 200  # 10pt
+            data_style.font = data_font
+            
+            # Data borders
+            data_borders = xlwt.Borders()
+            data_borders.left = xlwt.Borders.THIN
+            data_borders.right = xlwt.Borders.THIN
+            data_borders.top = xlwt.Borders.THIN
+            data_borders.bottom = xlwt.Borders.THIN
+            data_style.borders = data_borders
+            
+            # Map headers with intelligent matching
+            excel_headers = list(self.config["excel_headers"].values())
+            csv_headers = list(self.config["excel_headers"].keys())
+            
+            # Create header mapping with fuzzy matching
+            header_mapping = {}
+            for csv_header in csv_headers:
+                # Exact match first
+                if csv_header in combined_df.columns:
+                    header_mapping[csv_header] = csv_header
+                    continue
+                
+                # Case-insensitive match
+                for col in combined_df.columns:
+                    if csv_header.lower() == col.lower():
+                        header_mapping[csv_header] = col
+                        break
+                
+                # Partial match
+                if csv_header not in header_mapping:
+                    for col in combined_df.columns:
+                        if csv_header.lower() in col.lower() or col.lower() in csv_header.lower():
+                            header_mapping[csv_header] = col
+                            break
+            
+            self.logger.info(f"Header mapping: {header_mapping}")
+            
+            # Write headers
+            for col, header in enumerate(excel_headers):
+                worksheet.write(0, col, header, header_style)
+                # Set column width based on header length
+                worksheet.col(col).width = max(len(header) * 300, 3000)
+            
+            # Write data rows with validation
+            rows_written = 0
+            for row_idx, (_, row) in enumerate(combined_df.iterrows(), start=1):
+                for col_idx, csv_header in enumerate(csv_headers):
+                    value = ""
+                    
+                    if csv_header in header_mapping:
+                        mapped_column = header_mapping[csv_header]
+                        if mapped_column in row:
+                            value = row[mapped_column]
+                    
+                    # Handle different data types and clean data
+                    if pd.isna(value):
+                        value = ""
+                    elif isinstance(value, (int, float)):
+                        if pd.isna(value):
+                            value = ""
+                        else:
+                            value = str(value)
+                    else:
+                        value = str(value).strip()
+                        # Clean common issues
+                        value = value.replace('\n', ' ').replace('\r', ' ')
+                        if len(value) > 255:  # Excel cell limit
+                            value = value[:255]
+                    
+                    worksheet.write(row_idx, col_idx, value, data_style)
+                
+                rows_written += 1
+                
+                # Progress logging for large datasets
+                if rows_written % 1000 == 0:
+                    self.logger.info(f"Written {rows_written} rows to Excel")
+            
+            # Save Excel file
+            workbook.save(str(excel_path))
+            
+            # Verify file was created and get size
+            if excel_path.exists():
+                file_size = excel_path.stat().st_size
+                processing_time = (datetime.now() - start_time).seconds
+                
+                self.logger.info(f"Excel file created successfully: {excel_path}")
+                self.logger.info(f"Total records processed: {final_count}")
+                self.logger.info(f"File size: {file_size:,} bytes")
+                self.logger.info(f"Processing time: {processing_time} seconds")
+                self.logger.info(f"Header mapping used: {len(header_mapping)}/{len(csv_headers)} columns mapped")
+                
+                return True
+            else:
+                self.logger.error("Excel file was not created")
+                return False
+            
+        except Exception as e:
+            self.logger.error(f"Enhanced merge and Excel creation failed: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            return False
+    
+    def install_windows_integration(self):
+        """Install complete Windows integration"""
+        try:
+            self.logger.info("Installing Windows integration...")
+            
+            # Install startup registry entry
+            if self.install_startup_registry():
+                self.logger.info("Startup registry entry installed")
+            
+            # Install Windows Task Scheduler tasks
+            if self.install_task_scheduler():
+                self.logger.info("Task Scheduler tasks installed")
+            
+            self.logger.info("Windows integration installation complete")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Windows integration installation failed: {e}")
+            return False
+    
+    def install_startup_registry(self):
+        """Install Windows startup registry entry"""
+        try:
+            if not self.config["windows_integration"]["startup_enabled"]:
+                return True
+                
+            # Get current script path
+            script_path = os.path.abspath(__file__)
+            python_exe = sys.executable
+            
+            # Create startup command
+            startup_cmd = f'"{python_exe}" "{script_path}"'
+            
+            # Registry key for current user startup
+            reg_key = winreg.HKEY_CURRENT_USER
+            reg_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            
+            # Open registry key
+            with winreg.OpenKey(reg_key, reg_path, 0, winreg.KEY_SET_VALUE) as key:
+                winreg.SetValueEx(key, "EHC_Automation", 0, winreg.REG_SZ, startup_cmd)
+            
+            self.logger.info(f"Startup registry entry created: {startup_cmd}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to install startup registry: {e}")
+            return False
+    
+    def install_task_scheduler(self):
+        """Install Windows Task Scheduler tasks"""
+        try:
+            if not self.config["windows_integration"]["task_scheduler_enabled"]:
+                return True
+            
+            script_path = os.path.abspath(__file__)
+            python_exe = sys.executable
+            
+            # Create tasks for each time slot
+            for slot_time in self.config["time_slots"]:
+                task_name = f"EHC_Data_Collection_{slot_time.replace(':', '')}"
+                self.create_scheduled_task(task_name, python_exe, script_path, "--test", slot_time)
+            
+            # Create merge task
+            if self.config["time_slots"]:
+                last_slot = max(self.config["time_slots"])
+                last_time = datetime.strptime(last_slot, "%H:%M")
+                merge_time = last_time + timedelta(minutes=self.config["merge_delay_minutes"])
+                merge_time_str = merge_time.strftime("%H:%M")
+                
+                task_name = "EHC_Excel_Merge"
+                self.create_scheduled_task(task_name, python_exe, script_path, "--merge", merge_time_str)
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to install task scheduler: {e}")
+            return False
+    
+    def create_scheduled_task(self, task_name, python_exe, script_path, args, time_str):
+        """Create a Windows scheduled task"""
+        try:
+            # Create XML for task
+            task_xml = f"""<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Date>{datetime.now().isoformat()}</Date>
+    <Author>EHC Automation System</Author>
+    <Description>EHC Wireless LAN Data Collection Task</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <CalendarTrigger>
+      <StartBoundary>{datetime.now().strftime('%Y-%m-%d')}T{time_str}:00</StartBoundary>
+      <Enabled>true</Enabled>
+      <ScheduleByDay>
+        <DaysInterval>1</DaysInterval>
+      </ScheduleByDay>
+    </CalendarTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>{os.environ.get('USERNAME', 'User')}</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>true</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>{str(self.config["windows_integration"]["wake_computer"]).lower()}</WakeToRun>
+    <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>"{python_exe}"</Command>
+      <Arguments>"{script_path}" {args}</Arguments>
+      <WorkingDirectory>{os.path.dirname(script_path)}</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>"""
+            
+            # Save XML to temp file
+            temp_xml = Path.cwd() / f"{task_name}.xml"
+            with open(temp_xml, 'w', encoding='utf-16') as f:
+                f.write(task_xml)
+            
+            # Create task using schtasks command
+            cmd = [
+                'schtasks', '/create',
+                '/tn', task_name,
+                '/xml', str(temp_xml),
+                '/f'  # Force overwrite if exists
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            # Clean up temp file
+            temp_xml.unlink(missing_ok=True)
+            
+            if result.returncode == 0:
+                self.logger.info(f"Created scheduled task: {task_name} at {time_str}")
+                return True
+            else:
+                self.logger.error(f"Failed to create task {task_name}: {result.stderr}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Failed to create scheduled task {task_name}: {e}")
+            return False
+    
+    def uninstall_windows_integration(self):
+        """Remove Windows integration"""
+        try:
+            self.logger.info("Uninstalling Windows integration...")
+            
+            # Remove startup registry entry
+            try:
+                reg_key = winreg.HKEY_CURRENT_USER
+                reg_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+                with winreg.OpenKey(reg_key, reg_path, 0, winreg.KEY_SET_VALUE) as key:
+                    winreg.DeleteValue(key, "EHC_Automation")
+                self.logger.info("Startup registry entry removed")
+            except FileNotFoundError:
+                self.logger.info("Startup registry entry not found")
+            except Exception as e:
+                self.logger.warning(f"Failed to remove startup registry: {e}")
+            
+            # Remove scheduled tasks
+            task_names = []
+            for slot_time in self.config["time_slots"]:
+                task_names.append(f"EHC_Data_Collection_{slot_time.replace(':', '')}")
+            task_names.append("EHC_Excel_Merge")
+            
+            for task_name in task_names:
+                try:
+                    cmd = ['schtasks', '/delete', '/tn', task_name, '/f']
+                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    if result.returncode == 0:
+                        self.logger.info(f"Removed scheduled task: {task_name}")
+                    else:
+                        self.logger.warning(f"Task {task_name} not found or already removed")
+                except Exception as e:
+                    self.logger.warning(f"Failed to remove task {task_name}: {e}")
+            
+            self.logger.info("Windows integration uninstallation complete")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Windows integration uninstallation failed: {e}")
+            return False
+    
+    def schedule_jobs(self):
+        """Setup scheduled jobs with enhanced monitoring"""
+        time_slots = self.config["time_slots"]
+        
+        # Schedule data collection for each time slot
+        for slot_time in time_slots:
+            schedule.every().day.at(slot_time).do(self.run_data_collection)
+            self.logger.info(f"Scheduled enhanced data collection at {slot_time}")
+        
+        # Schedule merge operation after last time slot + delay
+        if time_slots:
+            last_slot = max(time_slots)
+            last_time = datetime.strptime(last_slot, "%H:%M")
+            merge_time = last_time + timedelta(minutes=self.config["merge_delay_minutes"])
+            merge_time_str = merge_time.strftime("%H:%M")
+            
+            schedule.every().day.at(merge_time_str).do(self.merge_and_create_excel)
+            self.logger.info(f"Scheduled enhanced merge operation at {merge_time_str}")
+    
+    def run_scheduler(self):
+        """Run the enhanced scheduling system with monitoring"""
+        self.schedule_jobs()
+        
+        self.logger.info("Complete EHC Automation System started - waiting for scheduled tasks")
+        print("Complete EHC Automation System is running...")
+        print(f"Scheduled time slots: {', '.join(self.config['time_slots'])}")
+        print("Press Ctrl+C to stop")
+        
+        try:
+            while True:
+                schedule.run_pending()
+                time.sleep(60)  # Check every minute
+        except KeyboardInterrupt:
+            self.logger.info("Complete system stopped by user")
+            print("\nComplete system stopped.")
+    
+    def run_manual_test(self):
+        """Enhanced manual test run with comprehensive validation"""
+        self.logger.info("Starting complete manual test run")
+        
+        # Test data collection
+        collection_result = self.run_data_collection()
+        
+        if collection_result:
+            self.logger.info("Manual data collection test completed successfully")
+            
+            # Test merge operation
+            merge_result = self.merge_and_create_excel()
+            
+            if merge_result:
+                self.logger.info("Complete manual test completed successfully")
+                print("\n✅ Complete test successful!")
+                print("- Data collection: ✅")
+                print("- Excel generation: ✅")
+                return True
+            else:
+                self.logger.error("Manual merge test failed")
+                print("\n❌ Test partially failed!")
+                print("- Data collection: ✅")
+                print("- Excel generation: ❌")
+                return False
+        else:
+            self.logger.error("Manual data collection test failed")
+            print("\n❌ Test failed!")
+            print("- Data collection: ❌")
+            print("- Excel generation: Not attempted")
+            return False
+
+def main():
+    """Enhanced main entry point with comprehensive command line interface"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(
+        description="Complete EHC Web Automation System",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python ehc_automation.py                    # Run scheduled system
+  python ehc_automation.py --test             # Run manual test
+  python ehc_automation.py --merge            # Merge CSV files only
+  python ehc_automation.py --install          # Install Windows integration
+  python ehc_automation.py --uninstall        # Remove Windows integration
+  python ehc_automation.py --config custom.json  # Use custom config
+        """
+    )
+    
+    parser.add_argument("--test", action="store_true", help="Run complete manual test")
+    parser.add_argument("--merge", action="store_true", help="Merge CSV files and create Excel only")
+    parser.add_argument("--install", action="store_true", help="Install Windows integration")
+    parser.add_argument("--uninstall", action="store_true", help="Remove Windows integration")
+    parser.add_argument("--config", default="ehc_config.json", help="Configuration file path")
+    
+    args = parser.parse_args()
+    
+    # Initialize complete system
+    ehc_system = CompleteEHCAutomationSystem(args.config)
+    
+    if args.install:
+        # Install Windows integration
+        print("Installing Windows integration...")
+        if ehc_system.install_windows_integration():
+            print("✅ Windows integration installed successfully!")
+            print("The system will now start automatically with Windows.")
+        else:
+            print("❌ Windows integration installation failed!")
+            return 1
+            
+    elif args.uninstall:
+        # Remove Windows integration
+        print("Removing Windows integration...")
+        if ehc_system.uninstall_windows_integration():
+            print("✅ Windows integration removed successfully!")
+        else:
+            print("❌ Windows integration removal failed!")
+            return 1
+            
+    elif args.test:
+        # Run complete manual test
+        print("Running complete system test...")
+        if ehc_system.run_manual_test():
+            return 0
+        else:
+            return 1
+            
+    elif args.merge:
+        # Run merge operation only
+        print("Running Excel merge operation...")
+        if ehc_system.merge_and_create_excel():
+            print("✅ Excel merge completed successfully!")
+            return 0
+        else:
+            print("❌ Excel merge failed!")
+            return 1
+    else:
+        # Run complete scheduled system
+        ehc_system.run_scheduler()
+    
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())

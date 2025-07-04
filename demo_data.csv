@@ -1,0 +1,6 @@
+Hostname,IP Address,MAC Address,WLAN (SSID),Data Rate (up),Data Rate (down),AP MAC
+Device-001,192.168.1.101,AA:BB:CC:DD:EE:01,EHC-WiFi,100 Mbps,200 Mbps,11:22:33:44:55:66
+Device-002,192.168.1.102,AA:BB:CC:DD:EE:02,EHC-WiFi,150 Mbps,250 Mbps,11:22:33:44:55:66
+Device-003,192.168.1.103,AA:BB:CC:DD:EE:03,Reception-Mobile,80 Mbps,180 Mbps,77:88:99:AA:BB:CC
+Device-004,192.168.1.104,AA:BB:CC:DD:EE:04,Reception-TV,120 Mbps,220 Mbps,77:88:99:AA:BB:CC
+Device-005,192.168.1.105,AA:BB:CC:DD:EE:05,EHC-15,90 Mbps,190 Mbps,11:22:33:44:55:66 

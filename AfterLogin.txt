@@ -1,0 +1,325 @@
+CSV Download Automation - Complete Task List
+📋 Project Overview
+//This is a Reference for doing everything perfectly.
+//ADD only Missing Functionality or Functions not working only needed to be updated.
+Login is Working Now Make sure there is no time out. Ensure at least 8 files are downloaded everyday. Slots or schedules are optional time constraints to get varied data.
+Goal: Automated download of 4 CSV files, 3 times daily (9:30 AM, 1:00 PM, 3:00 PM), 365 days/year Files: EHC-15, EHC TV, Reception Hall TV (Page 2), Reception Hall Mobile Total Daily Downloads: 12 files (4 files × 3 time slots) 3 slots are optional but 2 is bare minimum 3 is maximum.
+
+🔧 Phase 1: Setup & Configuration Tasks
+Task 1.1: Environment Setup
+[ ] Install Python 3.8+
+[ ] Install required packages: selenium, schedule, pandas, pathlib
+[ ] Download ChromeDriver (matching Chrome version)
+Implement Chrome Drive Updater and All essential tools to ensure the working of the app Always Updated. App updater is a better name. If there is gonna be conflict check best version to make sure app always work 365 days or 366 Days.
+[ ] Set up project directory structure
+[ ] Create configuration file for URLs, credentials, paths
+Task 1.2: Directory Structure Creation
+[ ] Create EHC_Data if it doesn't Exist
+[ ] Create EHC_Data/ folder with date-based subfolders
+[ ] Create logs/ folder for error tracking
+[ ] Create config/ folder for settings
+Task 1.3: Configuration File Setup
+[ ] Create config.json with:
+[ ] Web application URL
+[ ] Login credentials (encrypted)
+[ ] Download paths
+[ ] Timing settings
+[ ] Retry parameters
+
+🌐 Phase 2: Web Automation Core Tasks
+Task 2.1: Browser Setup & Management
+[ ] Configure Chrome browser with download preferences
+[ ] Set up headless mode option
+[ ] Configure download directory
+[ ] Implement browser restart capability
+[ ] Add browser crash recovery
+Task 2.2: Login System Implementation
+[ ] Create login function with credential handling
+[ ] Implement session management
+[ ] Add login failure detection
+[ ] Create session timeout handling
+[ ] Add multi-attempt login logic
+Task 2.3: Navigation Framework
+[ ] Create menu navigation function
+[ ] Implement "Wireless LANs" menu click (4th menu item)
+[ ] Add page load verification
+[ ] Create navigation state tracking
+[ ] Implement breadcrumb navigation
+
+📊 Phase 3: Data Extraction Tasks
+Task 3.1: Table Interaction System
+[ ] Locate main table with 18 records
+[ ] Implement record selection logic
+[ ] Create view table interaction
+[ ] Add table state verification
+[ ] Implement page navigation (Page 1 ↔ Page 2)
+Task 3.2: EHC-15 Download Process
+[ ] Navigate to EHC-15 record
+[ ] Click "Client" button in view table
+[ ] Locate and click "Download" button
+[ ] Monitor download completion
+[ ] Verify file integrity
+[ ] Rename file with timestamp
+Task 3.3: EHC TV Download Process
+[ ] Navigate to EHC TV record
+[ ] Click "Client" button in view table
+[ ] Locate and click "Download" button
+[ ] Monitor download completion
+[ ] Verify file integrity
+[ ] Rename file with timestamp
+Task 3.4: Reception Hall TV Download (Page 2)
+[ ] Navigate to Page 2 of table
+[ ] Wait for page content to load
+[ ] Select Reception Hall TV record
+[ ] Click "Client" button in view table
+[ ] Locate and click "Download" button
+[ ] Monitor download completion
+[ ] Verify file integrity
+Task 3.5: Reception Hall Mobile Download
+[ ] Navigate to Reception Hall Mobile record
+[ ] Click "Client" button in view table
+[ ] Locate and click "Download" button
+[ ] Monitor download completion
+[ ] Verify file integrity
+[ ] Rename file with timestamp
+
+🔄 Phase 4: Scheduling & Automation Tasks
+Task 4.1: Time-Based Scheduling
+[ ] Implement 9:30 AM daily schedule
+[ ] Implement 1:00 PM daily schedule
+[ ] Implement 3:00 PM daily schedule
+[ ] Add timezone handling
+[ ]Doesn't matter what time  it complete if At least 8 files downloaded a day.
+Task 4.2: Download Session Management
+[ ] Create download session tracking
+[ ] Implement time slot identification
+[ ] Add session completion verification
+[ ] Create inter-session cleanup
+[ ] Add session timeout handling
+Task 4.3: File Organization System
+[ ] Create daily folder structure (YYYY-MM-DD)
+[ ] Implement time-slot subfolders (0930, 1300, 1500)
+[ ] Add file naming convention (filename_HHMMSS.csv)
+[ ] Create file validation checks
+[ ] Implement duplicate file handling
+
+🛡️ Phase 5: Error Handling & Recovery Tasks
+Task 5.1: Element Location Strategies
+[ ] Implement multi-selector approach (ID, CSS, XPath, Text)
+[ ] Create element visibility checks
+[ ] Add clickability verification
+[ ] Implement element re-location on failure
+[ ] Create selector success tracking
+Task 5.2: Download Monitoring System
+[ ] Monitor download folder for new files
+[ ] Implement file size change detection
+[ ] Add download timeout detection
+[ ] Create download corruption checks
+[ ] Add partial download recovery
+Task 5.3: Retry Mechanisms
+[ ] Implement unlimited retry capability
+[ ] Add exponential backoff delays
+[ ] Create retry attempt tracking
+[ ] Add different retry strategies per error type
+[ ] Implement maximum daily retry limits
+Task 5.4: Browser Recovery Systems
+[ ] Detect browser crashes
+[ ] Implement browser restart logic
+[ ] Add session restoration
+[ ] Create navigation state recovery
+[ ] Add memory cleanup procedures
+
+📋 Phase 6: Monitoring & Maintenance Tasks
+Task 6.1: Logging System
+[ ] Create comprehensive error logging
+[ ] Add success/failure tracking
+[ ] Implement daily summary reports
+[ ] Create performance metrics logging
+[ ] Add file download statistics
+Task 6.2: Health Check System
+[ ] Daily download verification
+[ ] Missing file detection
+[ ] File integrity checks
+[ ] Schedule adherence monitoring
+[ ] System resource monitoring
+Task 6.3: Notification System
+[ ] Email alerts for failures
+[ ] Daily summary emails
+[ ] Critical error notifications
+[ ] Weekly performance reports
+[ ] Monthly maintenance alerts
+Task 6.4: Data Backup & Archive
+[ ] Daily backup of downloaded files
+[ ] Weekly archive creation
+[ ] Monthly data cleanup
+[ ] Backup verification procedures
+[ ] Archive integrity checks
+
+🔍 Phase 7: Testing & Validation Tasks
+Task 7.1: Unit Testing
+[ ] Test login functionality
+[ ] Test menu navigation
+[ ] Test download processes
+[ ] Test file organization
+[ ] Test error recovery
+Task 7.2: Integration Testing
+[ ] Test complete download cycles
+[ ] Test multi-time slot operations
+[ ] Test concurrent download handling
+[ ] Test system resource usage
+[ ] Test long-term stability
+Task 7.3: Stress Testing
+[ ] Test network interruption scenarios
+[ ] Test browser crash recovery
+[ ] Test file system issues
+[ ] Test concurrent access conflicts
+[ ] Test memory leak scenarios
+Task 7.4: Production Validation
+[ ] Dry run for full day
+[ ] Validate all 12 files downloaded
+[ ] Check file naming consistency
+[ ] Verify data integrity
+[ ] Confirm schedule adherence
+
+🚀 Phase 8: Deployment & Operations Tasks
+Task 8.1: Production Deployment
+[ ] Set up production environment
+[ ] Configure system service/daemon
+[ ] Set up auto-start on system boot
+[ ] Configure log rotation
+[ ] Set up monitoring dashboards
+Task 8.2: Documentation
+[ ] Create installation guide
+[ ] Write operation manual
+[ ] Document troubleshooting procedures
+[ ] Create maintenance schedule
+[ ] Write disaster recovery procedures
+Task 8.3: Maintenance Procedures
+[ ] Daily health checks
+[ ] Weekly performance reviews
+[ ] Monthly system updates
+[ ] Quarterly security updates
+[ ] Annual system upgrades
+
+📊 Success Metrics
+Daily Success Criteria
+[ ] All 4 CSV files downloaded 3 times (12 total files)
+[ ] Downloads completed within 10 minutes per session
+[ ] Zero data corruption or loss
+[ ] All files properly named and organized
+[ ] Schedule adherence: ±5 minutes tolerance
+Weekly Success Criteria
+[ ] 84 files downloaded successfully (7 days × 12 files)
+[ ] Less than 1% retry rate
+[ ] No manual intervention required
+[ ] All error logs reviewed and addressed
+[ ] Backup verification completed
+Monthly Success Criteria
+[ ] 360+ files downloaded successfully
+[ ] System uptime > 99.5%
+[ ] All scheduled maintenance completed
+[ ] Performance metrics within acceptable ranges
+[ ] Archive and cleanup procedures executed
+
+🔧 Technical Implementation Notes
+Priority Order
+Phase 1-2: Core setup and browser automation
+Phase 3: Data extraction implementation
+Phase 4: Scheduling system
+Phase 5: Error handling and recovery
+Phase 6-8: Monitoring, testing, and deployment
+Key Dependencies
+Selenium WebDriver stability
+Chrome browser compatibility
+Network connectivity reliability
+File system permissions
+System resource availability
+Critical Success Factors
+Robust element location strategies
+Comprehensive error recovery
+Accurate scheduling system
+Reliable file management
+Effective monitoring and alerting
+
+//
+https://51.38.163.73:8443/wsg/
+user:admin
+password:there will be password also
+
+https://51.38.163.73:8443/wsg/#0b99e269-b9f4-43da-9279-77a57cb13c60(after # it is dynamic, 0b99e269-b9f4-43da-9279-77a57cb13c60 is changed everytime we login.)
+
+
+Steps to webscrape accurately.
+step 1: on browser we need to  put the address https://51.38.163.73:8443/wsg/ (don't omit the / after wsg it is very important.
+step 2: Login with username on the first text field in the center we have 2 text fields, only these text fields are there . then secound text field is for password we should enter password there.
+step 3: take the menu items we have 4th menu item that is Wireless LANs. click
+step 4: sometimes we have to load so click on other items too, then get back to Wireless LANs. or reload again sometimes it is like that so reload to get data and then click Wireless LANs.
+step 5: then click on EHC TV then click on clients then click on download button.
+step 6: then click EHC-15 click download
+step 7: download reception hall tv and mobile also similarly from page 2. there are a total of 18  records in that we only take 4 of these.
+here is the html for yopur understanding
+<div class="x-menu x-layer x-menu-default x-border-box" id="menu-1320" tabindex="0" style="z-index: 19000; right: auto; left: 50px; top: 44px; visibility: hidden;"><div id="menu-1320-body" data-ref="body" class="x-menu-body x-menu-body x-unselectable x-menu-body-default x-box-layout-ct x-menu-body-default" role="presentation"><div role="presentation" id="menu-1320-before-scroller" class="x-box-scroller x-box-scroller-top x-box-scroller-menu x-box-scroller-menu-default" style="display:none"></div><div id="menu-1320-innerCt" data-ref="innerCt" role="presentation" class="x-box-inner x-box-scroller-body-vertical"><div id="menu-1320-targetEl" data-ref="targetEl" class="x-box-target" role="presentation"><div class="x-menu-item x-menu-item-default x-box-item" id="menuitem-1321"><a id="menuitem-1321-itemEl" data-ref="itemEl" class="x-menu-item-link" href="#" role="menuitem" hidefocus="true" unselectable="on" tabindex="-1" componentid="menuitem-1321"><span id="menuitem-1321-textEl" data-ref="textEl" class="x-menu-item-text x-menu-item-text-default x-menu-item-indent-no-separator" unselectable="on">Change Password</span><div role="presentation" id="menuitem-1321-iconEl" data-ref="iconEl" class="x-menu-item-icon-default x-menu-item-icon  x-menu-item-glyph" style="font-family:FontAwesome !important;"></div></a></div><div class="x-menu-item x-menu-item-default x-box-item" id="menuitem-1322"><a id="menuitem-1322-itemEl" data-ref="itemEl" class="x-menu-item-link" href="#" role="menuitem" hidefocus="true" unselectable="on" tabindex="-1" componentid="menuitem-1322"><span id="menuitem-1322-textEl" data-ref="textEl" class="x-menu-item-text x-menu-item-text-default x-menu-item-indent-no-separator" unselectable="on">Preferences</span><div role="presentation" id="menuitem-1322-iconEl" data-ref="iconEl" class="x-menu-item-icon-default x-menu-item-icon  x-menu-item-glyph" style="font-family:FontAwesome !important;"></div></a></div><div class="x-menu-item x-menu-item-default x-box-item" id="menuitem-1323"><a id="menuitem-1323-itemEl" data-ref="itemEl" class="x-menu-item-link" href="#" role="menuitem" hidefocus="true" unselectable="on" tabindex="-1" componentid="menuitem-1323"><span id="menuitem-1323-textEl" data-ref="textEl" class="x-menu-item-text x-menu-item-text-default x-menu-item-indent-no-separator" unselectable="on">Log off</span><div role="presentation" id="menuitem-1323-iconEl" data-ref="iconEl" class="x-menu-item-icon-default x-menu-item-icon  x-menu-item-glyph" style="font-family:FontAwesome !important;"></div></a></div></div></div><div role="presentation" id="menu-1320-after-scroller" class="x-box-scroller x-box-scroller-bottom x-box-scroller-menu x-box-scroller-menu-default" style="display:none"></div></div></div><div class="x-css-shadow" role="presentation" id="ext-element-5" data-sticky="true" style="box-shadow: rgb(136, 136, 136) 0px 0px 6px; right: auto; left: 0px; top: 4px; width: 11px; height: 7px; z-index: 19000; display: none;"></div><div class="x-tip x-layer x-tip-default x-border-box" style="z-index: 19000; right: auto; left: 0px; top: 0px; display: none;" id="tooltip-1404"><div id="tooltip-1404-body" data-ref="body" class="x-tip-body x-tip-body-default x-tip-body-default" role="presentation"><div id="tooltip-1404-outerCt" data-ref="outerCt" class="x-autocontainer-outerCt" role="presentation"><div id="tooltip-1404-innerCt" data-ref="innerCt" style="" class="x-autocontainer-innerCt" role="presentation"></div></div></div><div role="presentation" class="x-tip-anchor x-tip-anchor-top" id="ext-element-24" style="visibility: hidden;"></div></div><div data-sticky="true" role="presentation" class="x-textmetrics" id="ext-element-39" style="font-size: 12px; font-style: normal; font-weight: 300; font-family: &quot;Trebuchet MS&quot;, helvetica, arial, sans-serif; line-height: 15px; text-transform: none; letter-spacing: normal; word-break: normal; position: absolute; right: auto; left: -1000px; top: -1000px; visibility: hidden; width: auto;"></div></body>
+// in here we have to click
+<div class="x-grid-cell-inner " style="text-align:left;" id="ext-element-51"><span class=" rks-clickable-column">EHC TV</span></div>
+then click on (clients tab of the secound table view table)
+<span id="tab-3060-btnInnerEl" data-ref="btnInnerEl" unselectable="on" class="x-tab-inner x-tab-inner-default">Clients</span>
+then click on(download button)
+<span id="Rks-module-base-Button-3369-btnIconEl" data-ref="btnIconEl" role="presentation" unselectable="on" class="x-btn-icon-el x-btn-icon-el-default-toolbar-small  x-btn-glyph" style="font-family:FontAwesome !important;"></span>
+then click on the table element.
+<div class="x-grid-cell-inner " style="text-align:left;" id="ext-element-58"><span class=" rks-clickable-column">EHC-15</span></div>
+again we click on the download button.
+then we click on page 2
+<span id="button-2436-btnInnerEl" data-ref="btnInnerEl" unselectable="on" class="x-btn-inner x-btn-inner-plain-toolbar-small">2</span>
+
+then we have to go through this cycle again for page 2
+<span class=" rks-clickable-column">Reception Hall-Mobile</span>
+then clients then download button then 
+<span class=" rks-clickable-column">Reception Hall-TV</span>
+then just download button since the page changed means the clients will get vanished.
+
+step : 8 there is a schedule accordingly repeat acording to number of slots then merge the csv files altogether after 5 minutes of the last slot of download so each slot we have 4 files downloaded.
+the number of files is total if there is 2 slots of time like 9:30 am and 1:00 pm then there will be 8 files if there are 3 slots we have 12 files. these 12 files will have headers like this
+Hostname	IP Address	MAC Address	WLAN (SSID)	AP MAC	Data Rate (up)	Data Rate (down)
+even though there are more headers we just neglect rest of the headers.
+
+then the data of all these columns and rows are taken and merged to get a single excel file that is of 2007 model excel.
+step 9: the generated excel will have header like this
+Hostname	IP_Address	MAC_Address	Package	AP_MAC	Upload	Download
+
+
+so package is WLAN (SSID)
+Data Rate (up) is Upload
+Data Rate (down) is Download
+
+we need changes on the header. for the generated excel sheet only and also the excel must be old format 2007 microsoft excel. too so please make sure this is corrected. the downloaded csv files will have the 
+headers Hostname	IP Address	MAC Address	WLAN (SSID)	AP MAC	Data Rate (up)	Data Rate (down)
+then after merge the generated excel must have only
+Hostname	IP_Address	MAC_Address	Package	AP_MAC	Upload	Download
+
+so A is Hostname, B is IP_Address, C IS MAC_Address D IS Package E IS AP_MAC F IS Upload G IS Download When file gets generated.
+
+then that file will be named as EHC_Upload_Mac_01072025. where the 01072025 is the date month year.
+
+the csv files will be stored in different folder and merged file will be stored in another folder and inside those folders we create 01july folder according to date then we will keep updating for each date.
+ improvize this prd to accurately make the application according to this steps.
+ after this there is upload on the vbs code app. that i will add later but till here it is much more important.i don't need code or timeline just task list and features to do the app. detailed and perfect. with ui ux, python packages, libraries. and also windows features.
+ 
+ 
+
+Hostname	IP Address	MAC Address	WLAN (SSID)	AP MAC	Data Rate (up)	Data Rate (down)
+
+
+Hostname	IP_Address	MAC_Address	Package	AP_MAC	Upload	Download
+
+
+so package is WLAN (SSID)
+Data Rate (up) is Upload
+Data Rate (down) is Download
+
+we need changes on the header. for the generated excel sheet only and also the excel must be old format 2007 microsoft excel. too so please make sure this is corrected. the downloaded csv files will have the 
+headers Hostname	IP Address	MAC Address	WLAN (SSID)	AP MAC	Data Rate (up)	Data Rate (down)
+then after merge the generated excel must have only
+Hostname	IP_Address	MAC_Address	Package	AP_MAC	Upload	Download
+
+so A is Hostname, B is IP_Address, C IS MAC_Address D IS Package E IS AP_MAC F IS Upload G IS Download When file gets generated.
+
