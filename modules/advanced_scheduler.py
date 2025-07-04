@@ -34,7 +34,8 @@ class AdvancedScheduler:
         self.timezone = pytz.timezone('Asia/Kolkata')  # Adjust to your timezone
         self.time_slots = [
             {"name": "morning", "time": "09:30", "hour": 9, "minute": 30},
-            {"name": "afternoon", "time": "13:00", "hour": 13, "minute": 0}
+            {"name": "afternoon", "time": "13:00", "hour": 13, "minute": 0},
+            {"name": "evening", "time": "15:30", "hour": 15, "minute": 30}
         ]
         
         # Merge delay configuration
