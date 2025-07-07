@@ -1,0 +1,207 @@
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="X-CSRF-Token" content="7968DB1C36BFDA4ACE7A7704A4F52E94">
+<title>Ruckus Wireless&nbsp;-&nbsp;Virtual SmartZone - High Scale</title>
+<link id="link1" rel="shortcut icon" href="favicon.ico">
+
+<!-- SCG-35809: Performance tuning : Index page -->
+<script type="text/javascript" src="appHelper.js?v=3.6.2.0.222"></script>
+<script>
+var isPf = false;
+var IS_DEV_MODE = false;
+var isRealTimeMonitor = false; // to fixed the bug SCG-9600, SCG-10187
+var lastAction = null; // SCG-64112:
+_pf_start();
+</script>
+
+<!-- (CSS) import style of ExtJS -->
+
+    <link type="text/css" rel="stylesheet" href="scripts/ext5.1.1/packages/ext-theme-crisp/build/resources/ext.min.css?v=3.6.2.0.222" async="" defer="">
+
+<!-- (CSS) import style of Ext-UX -->
+
+    <link type="text/css" rel="stylesheet" href="scripts/ext5.1.1/examples/ux/css/ext-ux.min.css?v=3.6.2.0.222" async="" defer="">
+
+<!-- (CSS) import style of Rks New Ux -->
+
+    <link type="text/css" rel="stylesheet" href="styles/newux.min.css?v=3.6.2.0.222" async="" defer="">
+
+<!-- (CSS) import style of font-awesome -->
+
+    <link type="text/css" rel="stylesheet" href="styles/font-awesome-4.7.0/css/font-awesome.min.css?v=3.6.2.0.222" async="" defer="">
+
+<script>
+_pf_end('CSS_READY', 'css count='+document.styleSheets.length);
+
+var wsgRootPath = "/wsg";
+var wsgBasePath = "/wsg/api";
+var INT_MAX_VALUE = 2147483647;
+var MAX_UI_ROWS = 30000;
+var g_GuestpassRootUUID = "1cca21ab-d647-4ea5-92a5-9f693668bc92";
+var scgVersion = "3.6.2.0.222" ;
+var profileType = "vscg-carrier";
+var customize = "false";
+</script>
+
+</head>
+
+<body id="ext-element-1" class="x-body x-webkit x-chrome" style="">
+    
+    <!-- SCG-57533: enhance the page loading msg -->
+    <iframe id="maskFrame" src="login.jsp?ct=7968DB1C36BFDA4ACE7A7704A4F52E94" scrolling="no" style="border: none; width: 100%; height: calc(100% - 3px); position: absolute; z-index: 999 !important; opacity: 1;"></iframe>
+    
+    <form id="history-form" style="display: none;"> 
+        <input type="hidden" id="x-history-field"> 
+        <iframe id="x-history-frame"></iframe> 
+    </form>
+    
+<!-- import highcharts -->
+
+    <script type="text/javascript" src="scripts/highcharts/highcharts.min.js?v=3.6.2.0.222"></script>
+
+<!-- import ExtJS -->
+
+    <script type="text/javascript" src="scripts/ext/ext.min.js?v=3.6.2.0.222"></script>
+
+<!-- import d3 -->
+
+    <script type="text/javascript" src="scripts/d3/d3.min.js?v=3.6.2.0.222"></script>
+
+<script>
+_pf_end('JS_LIB_READY', 'js count='+getScriptFilesCount());
+initExtLoader();
+</script>
+
+
+
+
+
+
+
+<script>
+    var newFramework = true;
+    var publicApiRootPath = "/wsg";
+    var publicApiBasePath = "/wsg/api/public";
+    var publicApiVersion = "v6_1";
+
+    Ext.ns('Rks');
+    //Rks._globalConstant is not usable in normal way , this object will be deleted in soon later.
+    //Please use Rks.util.Constant to reference any constant data. e.g: Rks.util.Constant.APIPATH
+
+    //define global constant
+	//////////////////////////////////////////////////////////////////////////////////////
+    Rks._globalConstant = {
+        // SCG-64146: GUI Customization Page
+        COMPANYNAME : "Ruckus",
+        LOGINLOGO : "images/logo/login-logo.png",
+        ICONLOGO : "favicon.ico",
+        HEADERLOGO : "images/logo/ruckus-logo.png",
+        ENABLECUSTOMIZATION : "false",
+        // others
+        CONTEXTPATH : "/wsg",
+        APIPATH : "/wsg/api",
+        //PUBLIC_API_CONTEXTPATH : "publicApiRootPath",
+        //PUBLIC_API_APIPATH : "publicApiBasePath",
+        PUBLIC_API_CONTEXTPATH : "/wsg",
+        PUBLIC_API_APIPATH : "/wsg/api/public",
+        PUBLIC_API_VERSION : "v6_1",
+        INT_MAX_VALUE : 2147483647,
+        ROOT_ZONE_UUID : "00000000-0000-0000-0000-000000000000",
+        ADMIN_USER_UUID : "92cc1b65-c3cd-4f26-8c9b-3e7b055c7c25",
+        SUPER_TENANT_UUID : "839f87c6-d116-497e-afce-aa8157abd30c",
+        // Product
+        PROFILE_TYPE : "vscg-carrier",
+        PROFILE_MODEL_TYPE : "vSCGc",
+        PRODUCE_NAME : "Virtual SmartZone",
+        PRODUCE_VERSION : "- High Scale",
+        PRODUCE_FULL_NAME : "Virtual SmartZone",
+        PRODUCE_FULL_NAME_WITH_MODEL : "Virtual SmartZone - High Scale",
+        PRODUCE_SHORT_NAME : "Virtual SmartZone",
+        ENTERPRISE_ZONE : {
+            UUID : "f77a8816-3049-40cd-8484-82919275ddc3"
+        },
+        TENANT_ADMIN_ROLE : "55ad2561-62e8-45c7-86f1-98d29f4965a8",
+        REST_API_ROLE  :"82ee2e5b-21bf-4433-b912-2ad82b5f0b7d",
+        // UUID
+        UNMANAGED_DOMAIN_UUID : "8b2081d5-9662-40d9-a3db-2a3cf4dde3f7",
+        UNMANAGED_ZONE_UUID : "b4187899-38ae-4ace-8e40-0bc444455156",
+        SYSTEM_GROUP_UUID : "11111",
+        MAX_PAGE_SIZE : 30000-1,
+        DEFAULT_DASHBOARD_UUID : "fc4799ee-0ab0-4751-abb7-c6d8f6d95142",
+        DEFAULT_UI_MAX_TOTAL_COUNT : "30000",
+        DEFAULT_REMOTE_USER_PACKAGE_NAME : "External User Package",
+        DEFAULT_LOCAL_USER_PACKAGE_NAME : "Local User Package",
+        GUESTPASS_ROOT_UUID  : "1cca21ab-d647-4ea5-92a5-9f693668bc92",
+        JS_COMPRESSION_MODE  : true,
+        NETWORK_ADMIN_ROLE_UUID  : "eda9b878-8cd2-4adf-93b4-27d88166bcb7",
+        SUPER_ADMIN_ROLE_UUID  : "69962d35-9447-41a1-aff5-facf1e85c674",
+        SCG_ADMIN_ROLE_UUID  : "7c1922d6-9255-4c88-a7a4-5df89fa03a45",
+        UUID : {
+            DEFAULT_CARRIER_TUNNEL_PROFILE_ID : "77a20d60-43bf-494c-a6ff-daae10aebce4",
+            DEFAULT_ENTERPRISE_TUNNEL_PROFILE_ID : "f5b92938-aa4e-4d02-90ea-273799ff689b"
+        },
+        ACCOUNT_SECURITY_UUID : "11111111-5566-5566-5566-111111111111"
+
+    };
+    //////////////////////////////////////////////////////////////////////////////////////
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- RKS: modules: normal  -->
+
+ 
+ 
+    <script type="text/javascript" src="scripts/framework.min.js?v=3.6.2.0.222"></script>
+
+ 
+ 
+    <script type="text/javascript" src="scripts/scg_common.min.js?v=3.6.2.0.222"></script>
+
+ 
+ 
+    <script type="text/javascript" src="scripts/scg_dashboard.min.js?v=3.6.2.0.222"></script>
+
+
+<script>
+_pf_end('JS_MODULES_READY', 'modules = [framework, scg_common, scg_dashboard], js count='+getScriptFilesCount());
+</script>
+
+<script>
+    Rks.UIFrameworkConfig = Ext.apply(Rks.UIFrameworkConfig || {}, {
+        initAPModelImg : false,
+        lazyLoadModules : true,
+        initRealtime : true,
+        showInitText : false // SCG-57533: enhance the page loading msg
+    });
+    
+    // SCG-61418 UI Performance tuning: preload image for Dashboard
+    preloadImages();
+    
+    // init bootStrap
+    var bootStrapClass = 'Rks.newux.bootStrap.BootStrap', bootStrapCfg = {};
+    Ext.onReady(function () {
+        _pf_end('EXTJS_READY', Rks.html.getScriptFilesComment());
+        Ext.setGlyphFontFamily('FontAwesome !important'); // SCG-34280: use "Font Awesome" to display icons
+        
+            
+            
+                //appHelper.showLoginPage(); // PS: don't remove this code, other page(restart.jsp) need check this string
+            
+        
+    });
+</script>
+
+
+</body></html>

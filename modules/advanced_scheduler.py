@@ -232,7 +232,7 @@ class AdvancedScheduler:
             self.logger.info("🔄 Starting Excel merge operation")
             
             # Get today's CSV directory
-            today = datetime.now().strftime("%d%B").lower()  # e.g., "04july"
+            today = self._get_today_folder()
             csv_dir = Path(f"EHC_Data/{today}")
             
             if not csv_dir.exists():
@@ -336,6 +336,11 @@ class AdvancedScheduler:
             error_msg = f"Failed to trigger merge: {e}"
             self.logger.error(error_msg)
             return {"success": False, "error": error_msg}
+    
+    def _get_today_folder(self):
+        """Get today's folder name - works for all months and leap years"""
+        today = datetime.now().strftime("%d%B").lower()  # e.g., "04january", "29february" (leap year)
+        return today
 
 # Test function
 def test_scheduler():

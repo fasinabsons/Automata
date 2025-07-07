@@ -1,0 +1,316 @@
+---
+description:
+globs:
+alwaysApply: false
+1. Preserve Working Code
+
+
+
+
+
+Do Not Modify Working Code: Never alter files, functions, or modules confirmed as working (listed in working_code.txt) unless the user explicitly requests a fix for a specific issue.
+
+
+
+
+
+Check working_code.txt before any modification. If a file is listed, skip it unless instructed to correct it.
+
+
+
+Example: If web_scraper.py is working, do not edit it for new scraping tasks.
+
+
+
+Verify Status: Confirm a module’s working status by checking logs (Logs/<daymonth>/error_log_<DDMMYYYY>.log) or running existing tests. Assume code is functional if no errors are reported.
+
+
+
+Document Working Code: Maintain working_code.txt with entries like:
+
+File: web_scraper.py
+Verified: 01072025
+Description: Handles login and CSV downloads for EHC TV, EHC-15, etc.
+
+2. Add New Features Modularly
+
+
+
+
+
+Create Separate Files: Implement new features in new files to avoid touching existing code.
+
+
+
+
+
+Python: Use new_feature.py (e.g., new_report_scraper.py for a new report type).
+
+
+
+React: Use src/components/NewFeatureComponent.jsx for new UI components.
+
+
+
+Update Existing Text Files: For documentation or configuration, update README.md or config.txt instead of creating new markdown or text files (e.g., no new_feature.md).
+
+
+
+
+
+Check if README.md exists using os.path.exists() before creating any text file.
+
+
+
+Namespace Isolation: Use unique names for new functions/classes (e.g., NewFeatureDownloader instead of Downloader) to avoid conflicts.
+
+
+
+API Integration: Add new backend features as new Flask/FastAPI endpoints (e.g., /new_feature) and connect to the frontend without modifying existing routes.
+
+3. Follow System Requirements
+
+
+
+
+
+Web Scraping:
+
+
+
+
+
+Use Selenium in web_scraper.py to log in to https://51.38.163.73:8443/wsg/ (ensure trailing slash), enter credentials (admin, password), and handle dynamic session IDs.
+
+
+
+Navigate to "Wireless LANs" (4th menu item), handle loading issues by reloading or clicking other items, then download CSVs for "EHC TV", "EHC-15", "Reception Hall-Mobile", and "Reception Hall-TV".
+
+
+
+Store CSVs in CSV_Storage/<daymonth> (e.g., CSV_Storage/01july).
+
+
+
+File Management:
+
+
+
+
+
+Merge CSVs 5 minutes after the last scheduled slot into an Excel 2007 (.xls) file using pandas and xlwt.
+
+
+
+Rename headers: Hostname→Hostname, IP Address→IP_Address, MAC Address→MAC_Address, WLAN (SSID)→Package, AP MAC→AP_MAC, Data Rate (up)→Upload, Data Rate (down)→Download.
+
+
+
+Save as Excel_Storage/<daymonth>/EHC_Upload_Mac_<DDMMYYYY>.xls.
+
+
+
+VB Application Automation:
+
+
+
+
+
+Launch C:\Users\Lenovo\Music\moonflower\AbsonsItERP.exe - Shortcut.lnk or fallback to \\192.168.10.16\e\ArabianLive\ArabianLive_MoonFlower\AbsonsItERP.exe using pywin32.
+
+
+
+Automate login (Vj, empty password), navigate to "Wifi User Registration", upload the Excel file, and generate a PDF (Moon Flower Active Users_<DDMMYYYY>.pdf) in PDF_Storage/<daymonth>.
+
+
+
+Email Integration:
+
+
+
+
+
+Use win32com.client to send the PDF via Outlook at 9:00 AM the next day with a predefined message.
+
+
+
+Scheduling:
+
+
+
+
+
+Use apscheduler to schedule downloads, merging, uploads, and emails based on a configuration file (config/schedule.json).
+
+4. Ensure Reliability
+
+
+
+
+
+Error Handling: Wrap new code in try-catch blocks to prevent crashes. Log errors to Logs/<daymonth>/error_log_<DDMMYYYY>.log.
+
+
+
+
+
+Example: try: download_csv() except Exception as e: logger.error(f"CSV download failed: {e}").
+
+
+
+Retry Logic: Implement retries (e.g., 3 attempts) for web scraping, file operations, and VB interactions.
+
+
+
+Continuous Operation: Run the backend as a Windows service using NSSM or pywin32. Register for startup via Task Scheduler.
+
+
+
+Auto-Updates: Check for updates in a separate directory (updates/<version>), test thoroughly, and exclude working files listed in working_code.txt.
+
+
+
+Restart Handling: Save state to state.json and use psutil to resume after PC restarts.
+
+5. Frontend Development
+
+
+
+
+
+React Setup: Use CDN-hosted react, react-dom, and Tailwind CSS. Ensure iframe compatibility by avoiding frame-busting scripts.
+
+
+
+Components:
+
+
+
+
+
+Dashboard.jsx: Show status (last run, next slot, file counts, errors).
+
+
+
+ConfigPanel.jsx: Update schedules, paths, and credentials (store securely in config.json).
+
+
+
+NotificationBar.jsx: Display alerts for errors/success.
+
+
+
+API Calls: Use axios to connect to backend endpoints (/status, /logs, /config, /start, /stop).
+
+
+
+Styling: Use Tailwind CSS for responsive, high-contrast design.
+
+6. File and Folder Management
+
+
+
+
+
+Structured Storage:
+
+
+
+
+
+CSVs: CSV_Storage/<daymonth> (e.g., CSV_Storage/01july).
+
+
+
+Excel: Excel_Storage/<daymonth> (e.g., Excel_Storage/01july/EHC_Upload_Mac_01072025.xls).
+
+
+
+PDFs: PDF_Storage/<daymonth> (e.g., PDF_Storage/01july/Moon Flower Active Users_01072025.pdf).
+
+
+
+Logs: Logs/<daymonth>/error_log_<DDMMYYYY>.log.
+
+
+
+Check Before Creation: Use os.path.exists() to avoid duplicating folders or files.
+
+
+
+Avoid Unnecessary Files: Update README.md or config.txt instead of creating new text files.
+
+7. Testing and Validation
+
+
+
+
+
+Unit Tests: Write tests for new features in tests/test_new_feature.py without modifying existing tests.
+
+
+
+Regression Tests: Test existing functionality (scraping, merging, VB upload, email) after adding new features.
+
+
+
+Staging: Test new features in a separate branch (feature/new-feature) before merging to main.
+
+8. Version Control and Backup
+
+
+
+
+
+Git Usage: Commit changes with clear messages (e.g., Added new report in new_report_scraper.py). Use feature branches and avoid force-pushing.
+
+
+
+Backup: Save the codebase to backups/<DDMMYYYY> before changes. Log backups in backup_log.txt.
+
+
+
+Rollback: Maintain rollback versions in backups/rollback for recovery if updates fail.
+
+9. Specific Rules for Cursor
+
+
+
+
+
+Check Working Code List: Before editing, read working_code.txt to identify protected files. Skip these unless the user specifies a fix.
+
+
+
+Prompt for Confirmation: If instructed to modify working code, generate a comment in the code (e.g., # User-requested fix for issue X on 01072025) and log the request in change_requests.txt.
+
+
+
+Avoid Overwrites: If a file exists (e.g., README.md), append or update instead of creating a new one.
+
+
+
+Safe Integration: Add new features via configuration (e.g., config/schedule.json) or new modules to avoid touching core logic.
+
+10. User Interaction
+
+
+
+
+
+Memory Management: If the user requests to forget or edit conversation history, respond with:
+
+
+
+
+
+"To forget a chat, click the book icon beneath the relevant message and select the chat from the menu."
+
+
+
+"To disable memory, go to the 'Data Controls' section in settings."
+
+
+
+Feedback: Generate logs for all actions and display status updates in the React frontend.
+---

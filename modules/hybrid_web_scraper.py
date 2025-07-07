@@ -50,8 +50,9 @@ class BulletproofRuckusWiFiScraper:
         self.password = WIFI_CONFIG['password']
         self.target_url = WIFI_CONFIG['target_url']
         
-        # Initialize paths
-        self.download_dir = Path(f"EHC_Data/{datetime.now().strftime('%djuly')}")
+        # Setup date-based directory structure
+        today = datetime.now().strftime("%d%b").lower()  # e.g., "04aug", "29feb" (leap year)
+        self.download_dir = Path(f"EHC_Data/{today}")
         self.download_dir.mkdir(parents=True, exist_ok=True)
         
         # Initialize selenium driver

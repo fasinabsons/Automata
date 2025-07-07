@@ -1,0 +1,1426 @@
+//I have a react code for react csv processor take ideas to do everything correctly, take this as an idea for python.
+import Papa from 'papaparse';
+import { ProcessedRow } from '../types';
+
+const REQUIRED_COLUMNS = [
+  'Hostname',
+  'IP Address', 
+  'MAC Address',
+  'WLAN (SSID)',
+  'AP MAC',
+  'Data Rate (up)',
+  'Data Rate (down)'
+];
+
+// Column name variations to handle different CSV formats
+const COLUMN_MAPPINGS: Record<string, string[]> = {
+  'Hostname': ['hostname', 'host name', 'host_name', 'device name', 'device_name'],
+  'IP Address': ['ip address', 'ip_address', 'ipaddress', 'ip addr', 'ip_addr'],
+  'MAC Address': ['mac address', 'mac_address', 'macaddress', 'mac addr', 'mac_addr'],
+  'WLAN (SSID)': ['wlan (ssid)', 'wlan ssid', 'wlan_ssid', 'ssid', 'network name', 'network_name'],
+  'AP MAC': ['ap mac', 'ap_mac', 'apmac', 'access point mac', 'access_point_mac'],
+  'Data Rate (up)': ['data rate (up)', 'data_rate_up', 'upload rate', 'upload_rate', 'up rate', 'up_rate'],
+  'Data Rate (down)': ['data rate (down)', 'data_rate_down', 'download rate', 'download_rate', 'down rate', 'down_rate']
+};
+
+function normalizeHeaders(headers: string[]): Record<string, string> {
+  const headerMapping: Record<string, string> = {};
+  
+  headers.forEach(header => {
+    const normalizedHeader = header.toLowerCase().trim();
+    
+    // Find matching column
+    for (const [standardColumn, variations] of Object.entries(COLUMN_MAPPINGS)) {
+      if (normalizedHeader === standardColumn.toLowerCase() || variations.includes(normalizedHeader)) {
+        headerMapping[header] = standardColumn;
+        break;
+      }
+    }
+  });
+  
+  return headerMapping;
+}
+
+// Enhanced streaming parser for large files
+export function parseCSVFile(file: File): Promise<ProcessedRow[]> {
+  return new Promise((resolve, reject) => {
+    const processedRows: ProcessedRow[] = [];
+    let headerMapping: Record<string, string> = {};
+    let isFirstChunk = true;
+    let rowCount = 0;
+    const MAX_ROWS_PER_FILE = 100000; // Increased limit per file
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: 'greedy',
+      transformHeader: (header: string) => header.trim(),
+      chunk: (results, parser) => {
+        try {
+          // Handle first chunk to establish header mapping
+          if (isFirstChunk && results.data.length > 0) {
+            const headers = Object.keys(results.data[0] as Record<string, string>);
+            headerMapping = normalizeHeaders(headers);
+            
+            const foundColumns = Object.values(headerMapping);
+            if (foundColumns.length === 0) {
+              parser.abort();
+              reject(new Error(`No recognized columns found in ${file.name}. Expected columns: ${REQUIRED_COLUMNS.join(', ')}`));
+              return;
+            }
+            isFirstChunk = false;
+          }
+
+          // Process chunk data
+          const data = results.data as Record<string, string>[];
+          
+          data.forEach((row) => {
+            if (rowCount >= MAX_ROWS_PER_FILE) {
+              parser.abort();
+              console.warn(`File ${file.name} exceeded maximum rows (${MAX_ROWS_PER_FILE}). Processing first ${MAX_ROWS_PER_FILE} rows.`);
+              return;
+            }
+
+            const processedRow: ProcessedRow = {
+              // CSV format headers (input)
+              'Hostname': '',
+              'IP Address': '',
+              'MAC Address': '',
+              'WLAN (SSID)': '',
+              'AP MAC': '',
+              'Data Rate (up)': '',
+              'Data Rate (down)': '',
+              
+              // Excel format headers (output) - will be mapped from CSV
+              'IP_Address': '',
+              'MAC_Address': '',
+              'Package': '',
+              'AP_MAC': '',
+              'Upload': '',
+              'Download': ''
+            };
+
+            // Map values using header mapping
+            Object.entries(headerMapping).forEach(([originalHeader, standardHeader]) => {
+              const value = row[originalHeader];
+              const cleanValue = value ? value.trim() : '';
+              
+              // Set CSV format header
+              processedRow[standardHeader as keyof ProcessedRow] = cleanValue;
+              
+              // Also set corresponding Excel format header
+              switch (standardHeader) {
+                case 'Hostname':
+                  processedRow['Hostname'] = cleanValue;
+                  break;
+                case 'IP Address':
+                  processedRow['IP_Address'] = cleanValue;
+                  break;
+                case 'MAC Address':
+                  processedRow['MAC_Address'] = cleanValue;
+                  break;
+                case 'WLAN (SSID)':
+                  processedRow['Package'] = cleanValue;
+                  break;
+                case 'AP MAC':
+                  processedRow['AP_MAC'] = cleanValue;
+                  break;
+                case 'Data Rate (up)':
+                  processedRow['Upload'] = cleanValue;
+                  break;
+                case 'Data Rate (down)':
+                  processedRow['Download'] = cleanValue;
+                  break;
+              }
+            });
+
+            // Check if row has any non-empty values
+            const hasData = Object.values(processedRow).some(value => value !== '');
+            
+            if (hasData) {
+              processedRows.push(processedRow);
+              rowCount++;
+            }
+          });
+
+          // Yield control to prevent UI blocking
+          if (processedRows.length % 1000 === 0) {
+            setTimeout(() => {}, 0);
+          }
+
+        } catch (error) {
+          parser.abort();
+          reject(error);
+        }
+      },
+      complete: () => {
+        resolve(processedRows);
+      },
+      error: (error) => {
+        reject(new Error(`Failed to parse ${file.name}: ${error.message}`));
+      }
+    });
+  });
+}
+
+// Memory-efficient data combination with batching
+export function combineCSVData(allData: ProcessedRow[][]): ProcessedRow[] {
+  const combinedData: ProcessedRow[] = [];
+  const BATCH_SIZE = 5000;
+  
+  // Process in batches to manage memory
+  allData.forEach((fileData) => {
+    for (let i = 0; i < fileData.length; i += BATCH_SIZE) {
+      const batch = fileData.slice(i, i + BATCH_SIZE);
+      combinedData.push(...batch);
+      
+      // Yield control periodically for large datasets
+      if (combinedData.length % (BATCH_SIZE * 2) === 0) {
+        // Force garbage collection opportunity
+        if (typeof window !== 'undefined' && 'gc' in window) {
+          (window as unknown as { gc: () => void }).gc();
+        }
+      }
+    }
+  });
+
+  return combinedData;
+}
+
+// Enhanced validation with dynamic limits based on available memory
+export function validateFileSize(files: File[]): { isValid: boolean; message?: string } {
+  const MAX_FILES = 500; // Increased from 50 to 500
+  const MAX_TOTAL_SIZE = 2 * 1024 * 1024 * 1024; // 2GB total size
+  const MAX_SINGLE_FILE_SIZE = 500 * 1024 * 1024; // 500MB per file
+  
+  if (files.length > MAX_FILES) {
+    return {
+      isValid: false,
+      message: `Too many files selected. Maximum allowed: ${MAX_FILES} files.`
+    };
+  }
+
+  // Check individual file sizes
+  const oversizedFiles = files.filter(file => file.size > MAX_SINGLE_FILE_SIZE);
+  if (oversizedFiles.length > 0) {
+    return {
+      isValid: false,
+      message: `Files too large: ${oversizedFiles.map(f => f.name).join(', ')}. Maximum per file: 500MB`
+    };
+  }
+
+  const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+  
+  if (totalSize > MAX_TOTAL_SIZE) {
+    return {
+      isValid: false,
+      message: `Total file size exceeds 2GB limit. Current size: ${(totalSize / 1024 / 1024 / 1024).toFixed(2)}GB`
+    };
+  }
+
+  return { isValid: true };
+}
+
+export function validateCSVFiles(files: File[]): { validFiles: File[]; errors: string[] } {
+  const validFiles: File[] = [];
+  const errors: string[] = [];
+
+  files.forEach(file => {
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      errors.push(`${file.name} is not a CSV file`);
+    } else {
+      validFiles.push(file);
+    }
+  });
+
+  return { validFiles, errors };
+}
+
+// Memory usage estimation
+export function estimateMemoryUsage(files: File[]): { estimatedMB: number; isWithinLimits: boolean } {
+  // Rough estimation: CSV text expands ~3x when parsed into objects
+  const totalFileSize = files.reduce((sum, file) => sum + file.size, 0);
+  const estimatedMB = (totalFileSize * 3) / (1024 * 1024);
+  
+  // Check against available memory (rough heuristic)
+  const availableMemoryMB = (navigator as unknown as { deviceMemory?: number }).deviceMemory ? 
+    (navigator as unknown as { deviceMemory: number }).deviceMemory * 1024 * 0.3 : // Use 30% of device memory if available
+    1024; // Default to 1GB assumption
+  
+  return {
+    estimatedMB: Math.round(estimatedMB),
+    isWithinLimits: estimatedMB < availableMemoryMB
+  };
+}
+//excel generator
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
+import { ProcessedRow, AppSettings } from '../types';
+
+export function generateFileName(settings: AppSettings): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = settings.includeLeadingZero 
+    ? String(now.getDate()).padStart(2, '0')
+    : String(now.getDate());
+
+  let dateSuffix: string;
+  
+  if (settings.dateFormat === 'DMY') {
+    dateSuffix = `${day}${month}${year}`;
+  } else {
+    dateSuffix = `${year}${month}${day}`;
+  }
+
+  return `${settings.prefix}_${dateSuffix}.xlsx`;
+}
+
+// Enhanced Excel generation with streaming and memory optimization
+export function generateExcelFile(data: ProcessedRow[], settings: AppSettings): void {
+  if (data.length === 0) {
+    throw new Error('No data to export');
+  }
+
+  // Create a new workbook with optimized settings
+  const workbook = XLSX.utils.book_new();
+  
+  // Set workbook properties for large datasets
+  workbook.Props = {
+    Title: 'CSV to Excel Conversion',
+    Subject: 'Network Device Data',
+    Author: 'CSV to Excel Converter',
+    CreatedDate: new Date()
+  };
+
+  // Define column headers in exact order - Excel format
+  const headers = [
+    'Hostname',
+    'IP_Address', 
+    'MAC_Address',
+    'Package',
+    'AP_MAC',
+    'Upload',
+    'Download'
+  ];
+
+  // Process data in chunks for memory efficiency
+  const CHUNK_SIZE = 10000;
+  const totalRows = data.length;
+  let worksheet: XLSX.WorkSheet;
+
+  if (totalRows <= CHUNK_SIZE) {
+    // Small dataset - process normally
+    worksheet = createWorksheetFromData(data, headers);
+  } else {
+    // Large dataset - use streaming approach
+    worksheet = createLargeWorksheet(data, headers, CHUNK_SIZE);
+  }
+
+  // Set column widths for better readability
+  const columnWidths = [
+    { wch: 25 }, // Hostname - increased for longer names
+    { wch: 16 }, // IP Address
+    { wch: 20 }, // MAC Address
+    { wch: 30 }, // Package - increased for longer SSIDs
+    { wch: 20 }, // AP MAC
+    { wch: 18 }, // Upload
+    { wch: 18 }  // Download
+  ];
+
+  worksheet['!cols'] = columnWidths;
+
+  // Add freeze panes for header row
+  worksheet['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+  // Add the worksheet to workbook
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+
+  // Generate Excel file with compression and optimization
+  const writeOptions: XLSX.WritingOptions = {
+    bookType: 'xlsx',
+    type: 'array',
+    compression: true,
+    bookSST: totalRows > 5000, // Use shared string table for large datasets
+    cellStyles: false, // Disable styles for performance
+    sheetStubs: false // Don't create stubs for empty cells
+  };
+
+  try {
+    const excelBuffer = XLSX.write(workbook, writeOptions);
+
+    // Create blob with proper MIME type
+    const blob = new Blob([excelBuffer], { 
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+    });
+
+    const fileName = generateFileName(settings);
+    saveAs(blob, fileName);
+
+    // Clean up memory
+    if (typeof window !== 'undefined' && 'gc' in window) {
+      setTimeout(() => (window as unknown as { gc: () => void }).gc(), 1000);
+    }
+
+  } catch (error) {
+    throw new Error(`Failed to generate Excel file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+// Helper function for normal-sized datasets
+function createWorksheetFromData(data: ProcessedRow[], headers: string[]): XLSX.WorkSheet {
+  const worksheetData: (string | undefined)[][] = [];
+  
+  // Add headers as first row
+  worksheetData.push(headers);
+
+  // Add data rows
+  data.forEach(row => {
+    const dataRow = headers.map(header => {
+      const value = row[header as keyof ProcessedRow];
+      return value === '' ? undefined : value;
+    });
+    worksheetData.push(dataRow);
+  });
+
+  return XLSX.utils.aoa_to_sheet(worksheetData);
+}
+
+// Helper function for large datasets with memory optimization
+function createLargeWorksheet(data: ProcessedRow[], headers: string[], chunkSize: number): XLSX.WorkSheet {
+  // Create worksheet with headers first
+  const worksheet = XLSX.utils.aoa_to_sheet([headers]);
+  
+  // Process data in chunks to manage memory
+  for (let i = 0; i < data.length; i += chunkSize) {
+    const chunk = data.slice(i, i + chunkSize);
+    const chunkData = chunk.map(row => 
+      headers.map(header => {
+        const value = row[header as keyof ProcessedRow];
+        return value === '' ? undefined : value;
+      })
+    );
+
+    // Append chunk to worksheet
+    XLSX.utils.sheet_add_aoa(worksheet, chunkData, { origin: -1 });
+
+    // Yield control and allow garbage collection
+    if (i % (chunkSize * 2) === 0) {
+      // Force a brief pause to prevent UI blocking
+      setTimeout(() => {}, 0);
+    }
+  }
+
+  return worksheet;
+}
+
+// Utility to estimate Excel file size
+export function estimateExcelSize(rowCount: number): { estimatedMB: number; warning?: string } {
+  // Rough estimation: ~100 bytes per row for 7 columns
+  const estimatedBytes = rowCount * 100;
+  const estimatedMB = estimatedBytes / (1024 * 1024);
+  
+  let warning: string | undefined;
+  
+  if (estimatedMB > 100) {
+    warning = 'Large file size expected (>100MB). Download may take time.';
+  } else if (estimatedMB > 500) {
+    warning = 'Very large file size expected (>500MB). Ensure sufficient disk space.';
+  }
+
+  return {
+    estimatedMB: Math.round(estimatedMB * 10) / 10,
+    warning
+  };
+}
+//python i don't know if python works the react works perfectly
+import os
+import csv
+import pandas as pd
+import logging
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Any, Union
+from datetime import datetime
+import re
+import traceback
+
+from config import config
+
+class EnhancedCSVProcessor:
+    """Comprehensive CSV processing engine for WSG data"""
+    
+    def __init__(self):
+        self.config = config
+        self.logger = self._setup_logging()
+        self.processed_data = []
+        self.processing_stats = {
+            "files_processed": 0,
+            "total_rows": 0,
+            "valid_rows": 0,
+            "duplicate_rows": 0,
+            "error_rows": 0
+        }
+        
+    def _setup_logging(self) -> logging.Logger:
+        """Setup logging for CSV processor"""
+        logger = logging.getLogger("EnhancedCSVProcessor")
+        logger.setLevel(getattr(logging, self.config.LOGGING_CONFIG["level"]))
+        
+        # Use existing log directory
+        log_dir = self.config.get_log_directory()
+        log_file = log_dir / f"csv_processor_{datetime.now().strftime('%Y%m%d')}.log"
+        
+        if not logger.handlers:
+            file_handler = logging.FileHandler(log_file)
+            file_handler.setLevel(logging.DEBUG)
+            
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(logging.INFO)
+            
+            formatter = logging.Formatter(self.config.LOGGING_CONFIG["format"])
+            file_handler.setFormatter(formatter)
+            console_handler.setFormatter(formatter)
+            
+            logger.addHandler(file_handler)
+            logger.addHandler(console_handler)
+        
+        return logger
+    
+    def process_csv_files(self, csv_directory: Union[str, Path]) -> Dict[str, Any]:
+        """Process all CSV files in a directory with comprehensive validation"""
+        try:
+            self.logger.info(f"Starting CSV processing from directory: {csv_directory}")
+            
+            csv_dir = Path(csv_directory)
+            if not csv_dir.exists():
+                self.logger.error(f"CSV directory does not exist: {csv_dir}")
+                return {"success": False, "error": "Directory not found"}
+            
+            # Find all CSV files
+            csv_files = list(csv_dir.glob("*.csv"))
+            if not csv_files:
+                self.logger.warning(f"No CSV files found in directory: {csv_dir}")
+                return {"success": False, "error": "No CSV files found"}
+            
+            self.logger.info(f"Found {len(csv_files)} CSV files to process")
+            
+            # Reset processing stats
+            self.processed_data = []
+            self.processing_stats = {
+                "files_processed": 0,
+                "total_rows": 0,
+                "valid_rows": 0,
+                "duplicate_rows": 0,
+                "error_rows": 0
+            }
+            
+            # Process each CSV file
+            processing_results = {}
+            for csv_file in csv_files:
+                try:
+                    self.logger.info(f"Processing file: {csv_file.name}")
+                    file_result = self._process_single_csv(csv_file)
+                    processing_results[csv_file.name] = file_result
+                    
+                    if file_result["success"]:
+                        self.processing_stats["files_processed"] += 1
+                        self.logger.info(f"Successfully processed {csv_file.name}")
+                    else:
+                        self.logger.error(f"Failed to process {csv_file.name}: {file_result.get('error', 'Unknown error')}")
+                        
+                except Exception as e:
+                    error_msg = f"Error processing {csv_file.name}: {e}"
+                    self.logger.error(error_msg)
+                    processing_results[csv_file.name] = {"success": False, "error": error_msg}
+            
+            # Remove duplicates from combined data
+            if self.processed_data:
+                self._remove_duplicates()
+            
+            # Generate processing summary
+            summary = self._generate_processing_summary(processing_results)
+            self.logger.info(f"CSV processing completed. Summary: {summary}")
+            
+            return {
+                "success": True,
+                "processed_data": self.processed_data,
+                "file_results": processing_results,
+                "statistics": self.processing_stats,
+                "summary": summary
+            }
+            
+        except Exception as e:
+            error_msg = f"CSV processing failed: {e}"
+            self.logger.error(error_msg)
+            self.logger.error(traceback.format_exc())
+            return {"success": False, "error": error_msg}
+    
+    def _process_single_csv(self, csv_file: Path) -> Dict[str, Any]:
+        """Process a single CSV file with comprehensive validation"""
+        try:
+            # Detect file encoding
+            encoding = self._detect_encoding(csv_file)
+            self.logger.debug(f"Detected encoding for {csv_file.name}: {encoding}")
+            
+            # Read CSV with pandas for better handling
+            try:
+                df = pd.read_csv(csv_file, encoding=encoding, low_memory=False)
+            except UnicodeDecodeError:
+                # Fallback to different encodings
+                for fallback_encoding in ['utf-8-sig', 'latin1', 'cp1252']:
+                    try:
+                        df = pd.read_csv(csv_file, encoding=fallback_encoding, low_memory=False)
+                        self.logger.info(f"Successfully read {csv_file.name} with {fallback_encoding} encoding")
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                else:
+                    raise UnicodeDecodeError("Could not decode file with any encoding")
+            
+            if df.empty:
+                return {"success": False, "error": "Empty CSV file"}
+            
+            self.logger.info(f"Read {len(df)} rows from {csv_file.name}")
+            self.processing_stats["total_rows"] += len(df)
+            
+            # Standardize headers
+            df = self._standardize_headers(df)
+            
+            # Validate required columns
+            validation_result = self._validate_required_columns(df, csv_file.name)
+            if not validation_result["valid"]:
+                return {"success": False, "error": validation_result["error"]}
+            
+            # Clean and validate data
+            df_cleaned = self._clean_and_validate_data(df)
+            
+            # Convert to list of dictionaries for easier processing
+            file_data = df_cleaned.to_dict('records')
+            
+            # Add source file information
+            for row in file_data:
+                row['_source_file'] = csv_file.name
+                row['_processed_timestamp'] = datetime.now().isoformat()
+            
+            # Add to processed data
+            self.processed_data.extend(file_data)
+            self.processing_stats["valid_rows"] += len(file_data)
+            
+            return {
+                "success": True,
+                "rows_processed": len(file_data),
+                "original_rows": len(df),
+                "headers_found": list(df.columns),
+                "standardized_headers": list(df_cleaned.columns)
+            }
+            
+        except Exception as e:
+            error_msg = f"Failed to process {csv_file.name}: {e}"
+            self.logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+    
+    def _detect_encoding(self, file_path: Path) -> str:
+        """Detect file encoding"""
+        try:
+            import chardet
+            with open(file_path, 'rb') as f:
+                raw_data = f.read(10000)  # Read first 10KB
+                result = chardet.detect(raw_data)
+                return result['encoding'] or 'utf-8'
+        except ImportError:
+            # Fallback if chardet is not available
+            return 'utf-8'
+        except Exception:
+            return 'utf-8'
+    
+    def _standardize_headers(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Standardize CSV headers to match required format"""
+        self.logger.debug("Standardizing headers")
+        
+        # Create a mapping of possible variations to standard headers
+        header_variations = {
+            'Hostname': [
+                'hostname', 'host name', 'host_name', 'device name', 'device_name',
+                'client name', 'client_name', 'name', 'device', 'client'
+            ],
+            'IP Address': [
+                'ip address', 'ip_address', 'ipaddress', 'ip addr', 'ip_addr',
+                'ip', 'address', 'client ip', 'client_ip'
+            ],
+            'MAC Address': [
+                'mac address', 'mac_address', 'macaddress', 'mac addr', 'mac_addr',
+                'mac', 'client mac', 'client_mac', 'hardware address'
+            ],
+            'WLAN (SSID)': [
+                'wlan (ssid)', 'wlan ssid', 'wlan_ssid', 'ssid', 'network name', 
+                'network_name', 'wlan', 'wireless network', 'wifi name'
+            ],
+            'AP MAC': [
+                'ap mac', 'ap_mac', 'apmac', 'access point mac', 'access_point_mac',
+                'ap mac address', 'ap_mac_address', 'bssid'
+            ],
+            'Data Rate (up)': [
+                'data rate (up)', 'data_rate_up', 'upload rate', 'upload_rate',
+                'up rate', 'up_rate', 'tx rate', 'tx_rate', 'upstream'
+            ],
+            'Data Rate (down)': [
+                'data rate (down)', 'data_rate_down', 'download rate', 'download_rate',
+                'down rate', 'down_rate', 'rx rate', 'rx_rate', 'downstream'
+            ]
+        }
+        
+        # Create column mapping
+        column_mapping = {}
+        current_columns = [col.strip().lower() for col in df.columns]
+        
+        for standard_header, variations in header_variations.items():
+            for variation in variations:
+                if variation.lower() in current_columns:
+                    original_col = df.columns[current_columns.index(variation.lower())]
+                    column_mapping[original_col] = standard_header
+                    break
+        
+        # Apply mapping
+        df_renamed = df.rename(columns=column_mapping)
+        
+        # Log header mapping
+        if column_mapping:
+            self.logger.info(f"Header mapping applied: {column_mapping}")
+        else:
+            self.logger.warning("No header mapping applied - using original headers")
+        
+        return df_renamed
+    
+    def _validate_required_columns(self, df: pd.DataFrame, filename: str) -> Dict[str, Any]:
+        """Validate that all required columns are present"""
+        required_columns = self.config.REQUIRED_COLUMNS
+        available_columns = list(df.columns)
+        
+        missing_columns = []
+        for required_col in required_columns:
+            if required_col not in available_columns:
+                missing_columns.append(required_col)
+        
+        if missing_columns:
+            error_msg = f"Missing required columns in {filename}: {missing_columns}. Available: {available_columns}"
+            self.logger.error(error_msg)
+            return {"valid": False, "error": error_msg}
+        
+        self.logger.info(f"All required columns found in {filename}")
+        return {"valid": True}
+    
+    def _clean_and_validate_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Clean and validate data with comprehensive rules"""
+        self.logger.info("Cleaning and validating data")
+        
+        # Make a copy to avoid modifying original
+        df_clean = df.copy()
+        
+        # Remove completely empty rows
+        df_clean = df_clean.dropna(how='all')
+        
+        # Clean specific columns
+        if 'Hostname' in df_clean.columns:
+            df_clean['Hostname'] = df_clean['Hostname'].astype(str).str.strip()
+            df_clean = df_clean[df_clean['Hostname'].str.len() > 0]
+        
+        if 'IP Address' in df_clean.columns:
+            df_clean['IP Address'] = df_clean['IP Address'].astype(str).str.strip()
+            # Validate IP addresses
+            df_clean = df_clean[df_clean['IP Address'].apply(self._is_valid_ip)]
+        
+        if 'MAC Address' in df_clean.columns:
+            df_clean['MAC Address'] = df_clean['MAC Address'].astype(str).str.strip()
+            # Standardize MAC address format
+            df_clean['MAC Address'] = df_clean['MAC Address'].apply(self._standardize_mac_address)
+            # Remove invalid MAC addresses
+            df_clean = df_clean[df_clean['MAC Address'].apply(self._is_valid_mac)]
+        
+        if 'WLAN (SSID)' in df_clean.columns:
+            df_clean['WLAN (SSID)'] = df_clean['WLAN (SSID)'].astype(str).str.strip()
+        
+        if 'AP MAC' in df_clean.columns:
+            df_clean['AP MAC'] = df_clean['AP MAC'].astype(str).str.strip()
+            df_clean['AP MAC'] = df_clean['AP MAC'].apply(self._standardize_mac_address)
+        
+        # Clean data rate columns
+        for rate_col in ['Data Rate (up)', 'Data Rate (down)']:
+            if rate_col in df_clean.columns:
+                df_clean[rate_col] = df_clean[rate_col].apply(self._clean_data_rate)
+        
+        # Remove rows with critical missing data
+        critical_columns = ['Hostname', 'IP Address', 'MAC Address']
+        for col in critical_columns:
+            if col in df_clean.columns:
+                df_clean = df_clean[df_clean[col].notna()]
+                df_clean = df_clean[df_clean[col].astype(str).str.strip() != '']
+        
+        rows_removed = len(df) - len(df_clean)
+        if rows_removed > 0:
+            self.logger.info(f"Removed {rows_removed} invalid rows during cleaning")
+            self.processing_stats["error_rows"] += rows_removed
+        
+        return df_clean
+    
+    def _is_valid_ip(self, ip_str: str) -> bool:
+        """Validate IP address format"""
+        try:
+            if pd.isna(ip_str) or str(ip_str).strip() == '':
+                return False
+            
+            ip_str = str(ip_str).strip()
+            
+            # Basic IPv4 validation
+            parts = ip_str.split('.')
+            if len(parts) != 4:
+                return False
+            
+            for part in parts:
+                if not part.isdigit():
+                    return False
+                num = int(part)
+                if num < 0 or num > 255:
+                    return False
+            
+            return True
+        except Exception:
+            return False
+    
+    def _is_valid_mac(self, mac_str: str) -> bool:
+        """Validate MAC address format"""
+        try:
+            if pd.isna(mac_str) or str(mac_str).strip() == '':
+                return False
+            
+            mac_str = str(mac_str).strip()
+            
+            # Check for common MAC address patterns
+            mac_patterns = [
+                r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$',  # XX:XX:XX:XX:XX:XX or XX-XX-XX-XX-XX-XX
+                r'^([0-9A-Fa-f]{4}\.){2}([0-9A-Fa-f]{4})$',     # XXXX.XXXX.XXXX
+                r'^([0-9A-Fa-f]{12})$'                           # XXXXXXXXXXXX
+            ]
+            
+            for pattern in mac_patterns:
+                if re.match(pattern, mac_str):
+                    return True
+            
+            return False
+        except Exception:
+            return False
+    
+    def _standardize_mac_address(self, mac_str: str) -> str:
+        """Standardize MAC address to XX:XX:XX:XX:XX:XX format"""
+        try:
+            if pd.isna(mac_str) or str(mac_str).strip() == '':
+                return ''
+            
+            mac_str = str(mac_str).strip().upper()
+            
+            # Remove all separators and keep only hex characters
+            mac_clean = re.sub(r'[^0-9A-F]', '', mac_str)
+            
+            if len(mac_clean) == 12:
+                # Format as XX:XX:XX:XX:XX:XX
+                return ':'.join([mac_clean[i:i+2] for i in range(0, 12, 2)])
+            else:
+                # Return original if can't standardize
+                return mac_str
+        except Exception:
+            return str(mac_str) if not pd.isna(mac_str) else ''
+    
+    def _clean_data_rate(self, rate_str: Any) -> str:
+        """Clean and standardize data rate values"""
+        try:
+            if pd.isna(rate_str) or str(rate_str).strip() == '':
+                return '0'
+            
+            rate_str = str(rate_str).strip()
+            
+            # Extract numeric value from rate string
+            # Handle formats like "54 Mbps", "150.0", "N/A", etc.
+            if rate_str.lower() in ['n/a', 'na', 'none', '-', '']:
+                return '0'
+            
+            # Extract numbers from string
+            numbers = re.findall(r'\d+\.?\d*', rate_str)
+            if numbers:
+                return str(float(numbers[0]))
+            else:
+                return '0'
+        except Exception:
+            return '0'
+    
+    def _remove_duplicates(self):
+        """Remove duplicate entries based on MAC address"""
+        if not self.processed_data:
+            return
+        
+        self.logger.info("Removing duplicate entries")
+        
+        # Create DataFrame for easier duplicate handling
+        df = pd.DataFrame(self.processed_data)
+        
+        if 'MAC Address' in df.columns:
+            initial_count = len(df)
+            
+            # Remove duplicates based on MAC address, keeping the first occurrence
+            df_unique = df.drop_duplicates(subset=['MAC Address'], keep='first')
+            
+            duplicates_removed = initial_count - len(df_unique)
+            if duplicates_removed > 0:
+                self.logger.info(f"Removed {duplicates_removed} duplicate entries based on MAC address")
+                self.processing_stats["duplicate_rows"] = duplicates_removed
+            
+            # Update processed data
+            self.processed_data = df_unique.to_dict('records')
+        else:
+            self.logger.warning("MAC Address column not found - cannot remove duplicates")
+    
+    def _generate_processing_summary(self, file_results: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate comprehensive processing summary"""
+        successful_files = sum(1 for result in file_results.values() if result.get("success", False))
+        total_files = len(file_results)
+        
+        return {
+            "total_files": total_files,
+            "successful_files": successful_files,
+            "failed_files": total_files - successful_files,
+            "total_rows_processed": self.processing_stats["total_rows"],
+            "valid_rows": self.processing_stats["valid_rows"],
+            "duplicate_rows_removed": self.processing_stats["duplicate_rows"],
+            "error_rows": self.processing_stats["error_rows"],
+            "final_record_count": len(self.processed_data),
+            "processing_timestamp": datetime.now().isoformat()
+        }
+    
+    def get_processed_data(self) -> List[Dict[str, Any]]:
+        """Get processed data for Excel generation"""
+        return self.processed_data
+    
+    def save_processed_data_to_csv(self, output_path: Union[str, Path]) -> bool:
+        """Save processed data to a consolidated CSV file"""
+        try:
+            if not self.processed_data:
+                self.logger.warning("No processed data to save")
+                return False
+            
+            output_file = Path(output_path)
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Convert to DataFrame and save
+            df = pd.DataFrame(self.processed_data)
+            
+            # Remove internal columns
+            internal_columns = [col for col in df.columns if col.startswith('_')]
+            df = df.drop(columns=internal_columns, errors='ignore')
+            
+            # Ensure required columns are in correct order
+            required_cols = [col for col in self.config.REQUIRED_COLUMNS if col in df.columns]
+            other_cols = [col for col in df.columns if col not in required_cols]
+            ordered_columns = required_cols + other_cols
+            
+            df = df[ordered_columns]
+            
+            # Save to CSV
+            df.to_csv(output_file, index=False, encoding='utf-8-sig')
+            
+            self.logger.info(f"Processed data saved to: {output_file}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to save processed data: {e}")
+            return False
+
+# Convenience function for external use
+def process_csv_directory(csv_directory: Union[str, Path]) -> Dict[str, Any]:
+    """Process all CSV files in a directory"""
+    processor = EnhancedCSVProcessor()
+    return processor.process_csv_files(csv_directory)
+
+# Test function
+def test_csv_processing():
+    """Test CSV processing functionality"""
+    processor = EnhancedCSVProcessor()
+    
+    # Test with current download directory
+    download_dir = processor.config.get_download_directory()
+    
+    if download_dir.exists():
+        results = processor.process_csv_files(download_dir)
+        
+        print("\nCSV Processing Test Results:")
+        print("-" * 50)
+        print(f"Success: {results.get('success', False)}")
+        
+        if results.get('success'):
+            stats = results.get('statistics', {})
+            print(f"Files processed: {stats.get('files_processed', 0)}")
+            print(f"Total rows: {stats.get('total_rows', 0)}")
+            print(f"Valid rows: {stats.get('valid_rows', 0)}")
+            print(f"Duplicates removed: {stats.get('duplicate_rows', 0)}")
+            print(f"Error rows: {stats.get('error_rows', 0)}")
+        else:
+            print(f"Error: {results.get('error', 'Unknown error')}")
+    else:
+        print(f"Download directory not found: {download_dir}")
+
+if __name__ == "__main__":
+    test_csv_processing()
+    //excel generator
+    import os
+import logging
+from pathlib import Path
+from typing import Dict, List, Optional, Any, Union
+from datetime import datetime
+import traceback
+
+# Excel generation with xlwt for .xls format (Excel 2007 compatibility)
+try:
+    import xlwt
+    XLWT_AVAILABLE = True
+except ImportError:
+    XLWT_AVAILABLE = False
+    logging.warning("xlwt not available - Excel generation will be limited")
+
+# Fallback to openpyxl for .xlsx if xlwt not available
+try:
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
+
+from config import config
+
+class EnhancedExcelGenerator:
+    """Enhanced Excel generation engine with xlwt for .xls format"""
+    
+    def __init__(self):
+        self.config = config
+        self.logger = self._setup_logging()
+        
+        # Verify xlwt availability
+        if not XLWT_AVAILABLE:
+            self.logger.warning("xlwt library not found - attempting to install")
+            try:
+                import subprocess
+                import sys
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "xlwt"])
+                # Try importing again after installation
+                import xlwt
+                # Update module-level variables
+                globals()['xlwt'] = xlwt
+                globals()['XLWT_AVAILABLE'] = True
+                self.logger.info("xlwt library installed successfully")
+            except Exception as e:
+                self.logger.error(f"Failed to install xlwt: {e}")
+                raise ImportError("xlwt library not found and could not be installed. Install manually with: pip install xlwt")
+    
+    def _setup_logging(self) -> logging.Logger:
+        """Setup logging for Excel generator"""
+        logger = logging.getLogger("EnhancedExcelGenerator")
+        logger.setLevel(getattr(logging, self.config.LOGGING_CONFIG["level"]))
+        
+        # Use existing log directory
+        log_dir = self.config.get_log_directory()
+        log_file = log_dir / f"excel_generator_{datetime.now().strftime('%Y%m%d')}.log"
+        
+        if not logger.handlers:
+            file_handler = logging.FileHandler(log_file)
+            file_handler.setLevel(logging.DEBUG)
+            
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(logging.INFO)
+            
+            formatter = logging.Formatter(self.config.LOGGING_CONFIG["format"])
+            file_handler.setFormatter(formatter)
+            console_handler.setFormatter(formatter)
+            
+            logger.addHandler(file_handler)
+            logger.addHandler(console_handler)
+        
+        return logger
+    
+    def generate_excel_from_data(self, processed_data: List[Dict[str, Any]], 
+                                output_path: Union[str, Path] = None) -> Dict[str, Any]:
+        """Generate Excel file from processed data with comprehensive formatting"""
+        try:
+            self.logger.info("Starting Excel generation from processed data")
+            
+            if not processed_data:
+                return {"success": False, "error": "No data provided for Excel generation"}
+            
+            # Determine output path
+            if output_path is None:
+                merged_dir = self.config.get_merged_directory()
+                filename = self.config.get_excel_filename()
+                output_path = merged_dir / filename
+            else:
+                output_path = Path(output_path)
+            
+            # Ensure output directory exists
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            self.logger.info(f"Generating Excel file: {output_path}")
+            
+            # Generate Excel file using xlwt
+            result = self._generate_xls_file(processed_data, output_path)
+            
+            if result["success"]:
+                self.logger.info(f"Excel file generated successfully: {output_path}")
+                
+                # Generate file statistics
+                file_stats = self._get_file_statistics(output_path, len(processed_data))
+                result.update(file_stats)
+            
+            return result
+            
+        except Exception as e:
+            error_msg = f"Excel generation failed: {e}"
+            self.logger.error(error_msg)
+            self.logger.error(traceback.format_exc())
+            return {"success": False, "error": error_msg}
+    
+    def _generate_xls_file(self, data: List[Dict[str, Any]], output_path: Path) -> Dict[str, Any]:
+        """Generate .xls file using xlwt library with proper formatting"""
+        try:
+            # Create workbook
+            workbook = xlwt.Workbook(encoding='utf-8')
+            
+            # Create main data worksheet
+            worksheet = workbook.add_sheet('WSG_Data', cell_overwrite_ok=True)
+            
+            # Define styles
+            header_style = xlwt.XFStyle()
+            header_font = xlwt.Font()
+            header_font.name = 'Arial'
+            header_font.bold = True
+            header_font.height = 220  # 11pt
+            header_style.font = header_font
+            
+            header_pattern = xlwt.Pattern()
+            header_pattern.pattern = xlwt.Pattern.SOLID_PATTERN
+            header_pattern.pattern_fore_colour = xlwt.Style.colour_map['gray25']
+            header_style.pattern = header_pattern
+            
+            header_alignment = xlwt.Alignment()
+            header_alignment.horz = xlwt.Alignment.HORZ_CENTER
+            header_alignment.vert = xlwt.Alignment.VERT_CENTER
+            header_style.alignment = header_alignment
+            
+            # Data cell style
+            data_style = xlwt.XFStyle()
+            data_font = xlwt.Font()
+            data_font.name = 'Arial'
+            data_font.height = 200  # 10pt
+            data_style.font = data_font
+            
+            data_alignment = xlwt.Alignment()
+            data_alignment.horz = xlwt.Alignment.HORZ_LEFT
+            data_alignment.vert = xlwt.Alignment.VERT_CENTER
+            data_style.alignment = data_alignment
+            
+            # Apply header mapping from config
+            excel_headers = []
+            csv_to_excel_mapping = self.config.EXCEL_HEADER_MAPPING
+            
+            # Determine which columns to include based on available data
+            if data:
+                sample_row = data[0]
+                available_columns = [col for col in sample_row.keys() if not col.startswith('_')]
+                
+                # Map CSV headers to Excel headers
+                for csv_header in self.config.REQUIRED_COLUMNS:
+                    if csv_header in available_columns:
+                        excel_header = csv_to_excel_mapping.get(csv_header, csv_header)
+                        excel_headers.append((csv_header, excel_header))
+            
+            if not excel_headers:
+                return {"success": False, "error": "No valid columns found for Excel generation"}
+            
+            self.logger.info(f"Excel headers: {[eh[1] for eh in excel_headers]}")
+            
+            # Write headers
+            for col_idx, (csv_header, excel_header) in enumerate(excel_headers):
+                worksheet.write(0, col_idx, excel_header, header_style)
+                
+                # Set column width based on header length
+                col_width = max(len(excel_header) * 256, 2000)  # Minimum 2000 units
+                worksheet.col(col_idx).width = col_width
+            
+            # Write data rows
+            for row_idx, row_data in enumerate(data, start=1):
+                for col_idx, (csv_header, excel_header) in enumerate(excel_headers):
+                    cell_value = row_data.get(csv_header, '')
+                    
+                    # Clean cell value
+                    if cell_value is None:
+                        cell_value = ''
+                    else:
+                        cell_value = str(cell_value).strip()
+                    
+                    # Write cell with appropriate formatting
+                    worksheet.write(row_idx, col_idx, cell_value, data_style)
+            
+            # Add metadata sheet
+            self._add_metadata_sheet(workbook, data)
+            
+            # Save workbook
+            workbook.save(str(output_path))
+            
+            return {
+                "success": True,
+                "file_path": str(output_path),
+                "rows_written": len(data),
+                "columns_written": len(excel_headers),
+                "headers": [eh[1] for eh in excel_headers]
+            }
+            
+        except Exception as e:
+            error_msg = f"XLS file generation failed: {e}"
+            self.logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+    
+    def _add_metadata_sheet(self, workbook: xlwt.Workbook, data: List[Dict[str, Any]]):
+        """Add metadata sheet with processing information"""
+        try:
+            metadata_sheet = workbook.add_sheet('Metadata', cell_overwrite_ok=True)
+            
+            # Style for metadata
+            label_style = xlwt.XFStyle()
+            label_font = xlwt.Font()
+            label_font.name = 'Arial'
+            label_font.bold = True
+            label_style.font = label_font
+            
+            value_style = xlwt.XFStyle()
+            value_font = xlwt.Font()
+            value_font.name = 'Arial'
+            value_style.font = value_font
+            
+            # Write metadata
+            metadata_info = [
+                ("File Generated", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+                ("Total Records", len(data)),
+                ("Generated By", "WSG Automation System"),
+                ("Source", "WSG Interface Data Collection"),
+                ("Format Version", "Excel 2007 (.xls)"),
+                ("Header Mapping", "Applied as per configuration")
+            ]
+            
+            # Add source file information
+            if data:
+                source_files = set()
+                for row in data:
+                    source_file = row.get('_source_file', '')
+                    if source_file:
+                        source_files.add(source_file)
+                
+                if source_files:
+                    metadata_info.append(("Source Files", ", ".join(sorted(source_files))))
+            
+            # Write metadata to sheet
+            for row_idx, (label, value) in enumerate(metadata_info):
+                metadata_sheet.write(row_idx, 0, label, label_style)
+                metadata_sheet.write(row_idx, 1, str(value), value_style)
+            
+            # Set column widths
+            metadata_sheet.col(0).width = 4000  # Label column
+            metadata_sheet.col(1).width = 8000  # Value column
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to add metadata sheet: {e}")
+    
+    def _get_file_statistics(self, file_path: Path, record_count: int) -> Dict[str, Any]:
+        """Get file statistics"""
+        try:
+            file_stats = file_path.stat()
+            
+            return {
+                "file_size_bytes": file_stats.st_size,
+                "file_size_mb": round(file_stats.st_size / (1024 * 1024), 2),
+                "record_count": record_count,
+                "created_timestamp": datetime.now().isoformat(),
+                "file_name": file_path.name
+            }
+        except Exception as e:
+            self.logger.warning(f"Failed to get file statistics: {e}")
+            return {}
+    
+    def generate_excel_from_csv_directory(self, csv_directory: Union[str, Path], 
+                                        output_path: Union[str, Path] = None) -> Dict[str, Any]:
+        """Generate Excel file from CSV directory (combines processing and generation)"""
+        try:
+            self.logger.info("Starting combined CSV processing and Excel generation")
+            
+            # Import CSV processor
+            from csv_processor import EnhancedCSVProcessor
+            
+            # Process CSV files
+            processor = EnhancedCSVProcessor()
+            processing_result = processor.process_csv_files(csv_directory)
+            
+            if not processing_result.get("success", False):
+                return {
+                    "success": False, 
+                    "error": f"CSV processing failed: {processing_result.get('error', 'Unknown error')}"
+                }
+            
+            # Get processed data
+            processed_data = processing_result.get("processed_data", [])
+            
+            if not processed_data:
+                return {"success": False, "error": "No data available after CSV processing"}
+            
+            # Generate Excel file
+            excel_result = self.generate_excel_from_data(processed_data, output_path)
+            
+            # Combine results
+            combined_result = {
+                "success": excel_result.get("success", False),
+                "csv_processing": processing_result,
+                "excel_generation": excel_result
+            }
+            
+            if excel_result.get("success", False):
+                combined_result.update(excel_result)
+                self.logger.info("Combined CSV processing and Excel generation completed successfully")
+            
+            return combined_result
+            
+        except Exception as e:
+            error_msg = f"Combined processing and Excel generation failed: {e}"
+            self.logger.error(error_msg)
+            self.logger.error(traceback.format_exc())
+            return {"success": False, "error": error_msg}
+    
+    def generate_multi_slot_excel(self, slot_directories: List[Union[str, Path]], 
+                                output_path: Union[str, Path] = None) -> Dict[str, Any]:
+        """Generate Excel file from multiple time slot directories"""
+        try:
+            self.logger.info(f"Starting multi-slot Excel generation from {len(slot_directories)} directories")
+            
+            # Import CSV processor
+            from csv_processor import EnhancedCSVProcessor
+            
+            all_processed_data = []
+            slot_results = {}
+            
+            # Process each slot directory
+            for slot_idx, slot_dir in enumerate(slot_directories):
+                slot_name = f"slot_{slot_idx + 1}"
+                self.logger.info(f"Processing {slot_name}: {slot_dir}")
+                
+                processor = EnhancedCSVProcessor()
+                slot_result = processor.process_csv_files(slot_dir)
+                slot_results[slot_name] = slot_result
+                
+                if slot_result.get("success", False):
+                    slot_data = slot_result.get("processed_data", [])
+                    # Add slot information to each record
+                    for record in slot_data:
+                        record['_time_slot'] = slot_name
+                    all_processed_data.extend(slot_data)
+                    self.logger.info(f"Added {len(slot_data)} records from {slot_name}")
+                else:
+                    self.logger.error(f"Failed to process {slot_name}: {slot_result.get('error', 'Unknown error')}")
+            
+            if not all_processed_data:
+                return {"success": False, "error": "No data available from any time slot"}
+            
+            # Remove duplicates across all slots
+            self._remove_multi_slot_duplicates(all_processed_data)
+            
+            # Generate Excel file
+            excel_result = self.generate_excel_from_data(all_processed_data, output_path)
+            
+            # Combine results
+            combined_result = {
+                "success": excel_result.get("success", False),
+                "slot_processing": slot_results,
+                "excel_generation": excel_result,
+                "total_records": len(all_processed_data),
+                "slots_processed": len([r for r in slot_results.values() if r.get("success", False)])
+            }
+            
+            if excel_result.get("success", False):
+                combined_result.update(excel_result)
+                self.logger.info(f"Multi-slot Excel generation completed: {len(all_processed_data)} total records")
+            
+            return combined_result
+            
+        except Exception as e:
+            error_msg = f"Multi-slot Excel generation failed: {e}"
+            self.logger.error(error_msg)
+            self.logger.error(traceback.format_exc())
+            return {"success": False, "error": error_msg}
+    
+    def _remove_multi_slot_duplicates(self, data: List[Dict[str, Any]]):
+        """Remove duplicates across multiple time slots"""
+        try:
+            if not data:
+                return
+            
+            self.logger.info("Removing duplicates across time slots")
+            
+            # Create a set to track seen MAC addresses
+            seen_macs = set()
+            unique_data = []
+            
+            for record in data:
+                mac_address = record.get('MAC Address', '').strip()
+                if mac_address and mac_address not in seen_macs:
+                    seen_macs.add(mac_address)
+                    unique_data.append(record)
+            
+            duplicates_removed = len(data) - len(unique_data)
+            if duplicates_removed > 0:
+                self.logger.info(f"Removed {duplicates_removed} duplicate records across time slots")
+                
+                # Update original list
+                data.clear()
+                data.extend(unique_data)
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to remove multi-slot duplicates: {e}")
+
+# Convenience functions for external use
+def generate_excel_from_csv_directory(csv_directory: Union[str, Path], 
+                                    output_path: Union[str, Path] = None) -> Dict[str, Any]:
+    """Generate Excel file from CSV directory"""
+    generator = EnhancedExcelGenerator()
+    return generator.generate_excel_from_csv_directory(csv_directory, output_path)
+
+def generate_multi_slot_excel(slot_directories: List[Union[str, Path]], 
+                            output_path: Union[str, Path] = None) -> Dict[str, Any]:
+    """Generate Excel file from multiple time slot directories"""
+    generator = EnhancedExcelGenerator()
+    return generator.generate_multi_slot_excel(slot_directories, output_path)
+
+# Test function
+def test_excel_generation():
+    """Test Excel generation functionality"""
+    generator = EnhancedExcelGenerator()
+    
+    # Test with current download directory
+    download_dir = generator.config.get_download_directory()
+    
+    if download_dir.exists():
+        result = generator.generate_excel_from_csv_directory(download_dir)
+        
+        print("\nExcel Generation Test Results:")
+        print("-" * 50)
+        print(f"Success: {result.get('success', False)}")
+        
+        if result.get('success'):
+            print(f"File created: {result.get('file_path', 'N/A')}")
+            print(f"Records written: {result.get('record_count', 0)}")
+            print(f"File size: {result.get('file_size_mb', 0)} MB")
+            print(f"Headers: {result.get('headers', [])}")
+        else:
+            print(f"Error: {result.get('error', 'Unknown error')}")
+    else:
+        print(f"Download directory not found: {download_dir}")
+
+if __name__ == "__main__":
+    test_excel_generation() 

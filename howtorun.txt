@@ -1,0 +1,360 @@
+WIFI AUTOMATION SYSTEM - HOW TO RUN CORRECTLY
+===============================================
+
+OVERVIEW
+========
+This guide explains how to properly run the WiFi Automation System for MoonFlower Hotel.
+The system has multiple components: Backend Service, Frontend Dashboard, and Scheduled Tasks.
+✅ UPDATED: January 2025 - Now includes dynamic file system, 8-file minimum guarantee, and centralized logging
+
+CURRENT SYSTEM STATUS
+=====================
+✅ Dynamic File System: Uses DDmonth format (06jul, 07jul, etc.)
+✅ 8-File Minimum Guarantee: Auto-downloads when files < 8
+✅ Centralized Logging: All logs in EHC_Logs folder with 7-day auto-cleanup
+✅ Login Timeout Issues: Fixed with SSL certificate error handling
+✅ Business Hours Enforcement: 9 AM - 5 PM operations only
+✅ Health Monitoring: Every 5 minutes during business hours
+
+WORKING FILES (CURRENT)
+=======================
+Main Service Files:
+- enhanced_service_runner.py (Main service with dynamic file system)
+- corrected_wifi_app.py (Working CSV download app)
+- generate_excel_now.py (Excel generation with dynamic file system)
+- modules/web_scraper.py (WiFiWebScraper class)
+- modules/hybrid_web_scraper.py (BulletproofRuckusWiFiScraper class)
+- modules/dynamic_file_manager.py (Dynamic folder management)
+
+Batch Files:
+- start_enhanced_service.bat (Main startup script)
+- start_full_system.bat (Full system with frontend)
+
+SCHEDULING CONFIGURATION
+========================
+The system runs at the following times with business hours enforcement:
+
+Primary Schedule (Day Only - 9 AM to 5 PM):
+- 09:30 AM (Morning) - Primary morning slot
+- 13:00 PM (Afternoon) - Primary afternoon slot (1:00 PM)
+- 21:05 PM (Evening) - PRIMARY EVENING SLOT DISABLED (outside business hours)
+
+Backup Schedule (if primary fails):
+- 09:30 AM → 09:30 AM (retry if 09:05 fails)
+- 13:00 PM → 13:30 PM (retry if 13:00 fails) (1:30 PM)
+- 21:05 PM → DISABLED (outside business hours)
+
+8-File Minimum System:
+- Health check every 5 minutes during business hours
+- Auto-download when CSV files < 8 in today's folder
+- Excel generation triggered at 8 files
+- Email notifications for status updates
+
+QUICK START GUIDE
+=================
+
+1. BACKEND ONLY (Most Common Usage)
+   ---------------------------------
+   For daily operations, you only need the backend service:
+   
+   Step 1: Open Command Prompt as Administrator
+   Step 2: Navigate to project directory
+   Step 3: Run: start_enhanced_service.bat
+   
+   This will:
+   - Start the background service with dynamic file system
+   - Enable automatic scheduling (day only)
+   - Run downloads at scheduled times
+   - Handle email notifications
+   - Ensure 8-file minimum guarantee
+   - Manage VBS integration
+   - Create dynamic folders (DDmonth format)
+
+2. FRONTEND + BACKEND (Configuration Mode)
+   ----------------------------------------
+   For system monitoring and configuration:
+   
+   Step 1: Start Backend Service
+   - Open Command Prompt as Administrator
+   - Run: start_enhanced_service.bat
+   
+   Step 2: Start Frontend Dashboard
+   - Open another Command Prompt
+   - Run: start_frontend.bat
+   
+   Step 3: Access Dashboard
+   - Open browser: http://localhost:3000
+   - Configure settings as needed
+
+DETAILED INSTRUCTIONS
+====================
+
+BACKEND SERVICE SETUP
+---------------------
+1. Prerequisites:
+   - Python 3.8+ installed
+   - Chrome browser installed
+   - All dependencies installed (run: pip install -r requirements.txt)
+   - Gmail app password configured
+
+2. Configuration Check:
+   - Verify config/email_config.py has correct credentials
+   - Check EHC_Data, EHC_Data_Merge, EHC_Data_Pdf folders exist
+   - Ensure VBS application path is correct
+   - Verify EHC_Logs folder exists (created automatically)
+
+3. Running Backend Service:
+   
+   Option A: Enhanced Service (Recommended)
+   - Double-click: start_enhanced_service.bat
+   - Service runs in background with dynamic file system
+   - Automatic restart on crashes
+   - Scheduled execution at defined times
+   - 8-file minimum guarantee active
+   
+   Option B: Manual Execution
+   - Run: python enhanced_service_runner.py
+   - Keep command prompt open
+   - Manual monitoring required
+
+FRONTEND DASHBOARD SETUP
+------------------------
+1. Prerequisites:
+   - Node.js 16+ installed
+   - npm or yarn package manager
+   - Backend service running
+
+2. Installation:
+   - Run: npm install (if first time)
+   - Verify package.json dependencies
+
+3. Running Frontend:
+   - Run: npm run dev
+   - Access: http://localhost:3000
+   - Dashboard shows system status
+
+FULL SYSTEM STARTUP
+===================
+
+AUTOMATIC STARTUP (Recommended)
+-------------------------------
+1. Run: start_enhanced_service.bat
+2. Service automatically starts with Windows
+3. No manual intervention required
+4. Logs available in EHC_Logs/ directory (auto-cleanup after 7 days)
+
+MANUAL STARTUP (Development/Testing)
+-----------------------------------
+1. Backend First:
+   - Open Command Prompt as Administrator
+   - cd C:\Users\Lenovo\Videos\Automata
+   - python enhanced_service_runner.py
+
+2. Frontend (Optional):
+   - Open new Command Prompt
+   - cd C:\Users\Lenovo\Videos\Automata
+   - npm run dev
+
+DYNAMIC FOLDER STRUCTURE
+========================
+The system automatically creates date-based folders using DDmonth format:
+
+Data Folders (Auto-created):
+- EHC_Data/ (CSV files by date)
+  - 06jul/ (today's CSV files)
+  - 07jul/ (tomorrow's CSV files)
+  - etc.
+
+- EHC_Data_Merge/ (Excel files by date)
+  - 06jul/ (today's Excel files)
+  - 07jul/ (tomorrow's Excel files)
+  - etc.
+
+- EHC_Data_Pdf/ (PDF reports by date)
+  - 06jul/ (today's PDF files)
+  - 07jul/ (tomorrow's PDF files)
+  - etc.
+
+System Folders:
+- EHC_Logs/ (centralized system logs - 7-day auto-cleanup)
+- downloads/ (temporary downloads)
+- config/ (configuration files)
+- modules/ (system modules)
+
+SCHEDULING VERIFICATION
+======================
+The system creates date-based folders automatically using dynamic file manager:
+- First run of the day creates today's folders (DDmonth format)
+- Downloads go to: EHC_Data/[DDmonth]/
+- Excel files go to: EHC_Data_Merge/[DDmonth]/
+- PDF files go to: EHC_Data_Pdf/[DDmonth]/
+
+Schedule Times (Business Hours Only):
+- 09:30 AM: Morning data collection
+- 13:00 PM: Afternoon data collection (1:00 PM)
+- 21:05 PM: DISABLED (outside business hours)
+
+8-File Minimum System:
+- Health check every 5 minutes (9 AM - 5 PM)
+- Auto-download when CSV files < 8
+- Excel generation at 8 files
+- Email notifications for status
+
+MONITORING THE SYSTEM
+====================
+
+1. Check Service Status:
+   - Run: python check_schedule_status.py
+   - Shows current schedule status
+   - Displays next run times
+
+2. View Logs:
+   - Check EHC_Logs/automation.log (centralized logging)
+   - Real-time monitoring of operations
+   - Error tracking and debugging
+   - Automatic cleanup after 7 days
+
+3. Verify Downloads:
+   - Check EHC_Data/[DDmonth]/ (e.g., EHC_Data/06jul/)
+   - Should contain 4 CSV files per successful run
+   - Files named: clients.csv, clients(1).csv, etc.
+
+4. Check 8-File Status:
+   - Run: python test_8_file_minimum.py
+   - Verify current file count
+   - Check Excel generation status
+
+5. Check Email Notifications:
+   - Verify emails sent to: faseenm@gmail.com
+   - Contains PDF attachment
+   - Professional MoonFlower Hotel format
+
+TROUBLESHOOTING
+===============
+
+Common Issues:
+
+1. No Files Downloaded:
+   - Check internet connection
+   - Verify Ruckus controller is accessible
+   - Check Chrome browser is installed
+   - Review EHC_Logs/automation.log for error messages
+
+2. Dynamic Folders Not Created:
+   - Check DynamicFileManager in modules/
+   - Verify permissions on project directory
+   - Run: python -c "from modules.dynamic_file_manager import DynamicFileManager; dm = DynamicFileManager(); print(dm.get_current_date_folder_status())"
+
+3. 8-File Minimum Not Working:
+   - Check business hours (9 AM - 5 PM)
+   - Verify health monitoring is active
+   - Check EHC_Logs/automation.log for health check messages
+
+4. Email Not Sent:
+   - Verify Gmail app password in config/email_config.py
+   - Check email credentials
+   - Run: python test_email_simple.py
+
+5. VBS Integration Failed:
+   - Verify VBS application path
+   - Check if AbsonsItERP.exe is accessible
+   - Review EHC_Logs/vbs_automation_*.log
+
+6. Folders Not Created:
+   - Check permissions on project directory
+   - Verify disk space available
+   - Run: python -c "from modules.dynamic_file_manager import DynamicFileManager; dm = DynamicFileManager(); dm.get_download_directory()"
+
+7. Schedule Not Running:
+   - Check if service is running
+   - Verify Windows Task Scheduler permissions
+   - Restart service: restart_if_needed.bat
+
+8. Log Files Growing Too Large:
+   - Logs automatically cleaned up after 7 days
+   - Check EHC_Logs/ directory
+   - Manual cleanup: python -c "from core.logger import cleanup_old_logs; cleanup_old_logs()"
+
+SYSTEM MAINTENANCE
+==================
+
+Daily Tasks:
+- Check EHC_Logs/automation.log for errors
+- Verify file downloads completed
+- Confirm email notifications sent
+- Check 8-file minimum status
+
+Weekly Tasks:
+- Review system performance
+- Check disk space usage
+- Update credentials if needed
+- Review dynamic folder structure
+
+Monthly Tasks:
+- Archive old data files (system auto-cleans after 2 months)
+- Update system dependencies
+- Review and optimize performance
+
+EMERGENCY PROCEDURES
+===================
+
+If System Fails:
+1. Check EHC_Logs/automation.log for errors
+2. Restart service: restart_if_needed.bat
+3. Manual execution: python enhanced_service_runner.py
+4. Contact support with error logs
+
+If Data Missing:
+1. Check EHC_Data/[DDmonth]/ folder
+2. Verify network connectivity
+3. Manual download: python corrected_wifi_app.py
+4. Check Ruckus controller accessibility
+
+If 8-File Minimum Fails:
+1. Check business hours (9 AM - 5 PM)
+2. Manual trigger: python test_8_file_minimum.py
+3. Check health monitoring logs
+4. Verify dynamic file manager
+
+CONTACT INFORMATION
+==================
+For technical support or issues:
+- Check EHC_Logs/automation.log first
+- Review error messages
+- Run diagnostic: python verify_system.py
+- Document error details for support
+
+PERFORMANCE OPTIMIZATION
+========================
+For best performance:
+- Run on dedicated machine
+- Ensure stable internet connection
+- Keep Chrome browser updated
+- Monitor disk space regularly
+- Schedule during low network usage
+- Business hours only (9 AM - 5 PM)
+
+SECURITY CONSIDERATIONS
+======================
+- Keep credentials secure
+- Use app passwords for Gmail
+- Regularly update dependencies
+- Monitor access logs in EHC_Logs/
+- Backup configuration files
+
+RECENT UPDATES (January 2025)
+=============================
+✅ Integrated dynamic file system (DDmonth format)
+✅ Implemented 8-file minimum guarantee
+✅ Fixed login timeout issues with SSL handling
+✅ Centralized all logs in EHC_Logs folder
+✅ Added automatic log cleanup (7-day retention)
+✅ Business hours enforcement (9 AM - 5 PM)
+✅ Health monitoring every 5 minutes
+✅ Email notifications for all operations
+✅ Monthly data cleanup (2-month retention)
+
+This system is designed to run automatically with minimal intervention.
+The enhanced service runner handles most error conditions and provides
+comprehensive logging for troubleshooting. All logs are centralized in
+EHC_Logs/ with automatic cleanup after 7 days. 

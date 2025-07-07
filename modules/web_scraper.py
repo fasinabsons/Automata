@@ -1,33 +1,66 @@
-import time
+#!/usr/bin/env python3
+"""
+Enhanced WiFi Web Scraper with dynamic file system integration
+"""
+
 import os
+import sys
+import time
+import logging
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+import traceback
 import shutil
 import socket
 import requests
-from datetime import datetime
-from pathlib import Path
+import urllib3
+import undetected_chromedriver as uc
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
+
+# Selenium imports
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.keys import Keys
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
-import undetected_chromedriver as uc
-import urllib3
-from config.settings import WIFI_CONFIG, CHROME_CONFIG, CSV_DIR
+
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+from config.settings import WIFI_CONFIG, CHROME_CONFIG, CSV_DIR, TIMING_CONFIG
 from core.logger import logger
+from modules.dynamic_file_manager import DynamicFileManager
 from modules.hybrid_web_scraper import HybridWiFiScraper
 
 # Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class WiFiWebScraper:
+    """Enhanced WiFi Web Scraper with dynamic file system"""
+    
     def __init__(self, execution_id=None):
-        self.execution_id = execution_id
+        self.execution_id = execution_id or f"scraper_{int(time.time())}"
         self.driver = None
-        self.download_dir = None
+        self.wait = None
+        
+        # Initialize dynamic file manager
+        self.file_manager = DynamicFileManager()
+        
+        # Use dynamic download directory
+        today_folder = self.file_manager.create_today_folder()
+        self.download_dir = Path(today_folder)
+        
+        logger.info(f"WiFi scraper initialized with dynamic folder: {self.download_dir}", "WebScraper", self.execution_id)
+        
+        # Ensure download directory exists
+        self.download_dir.mkdir(parents=True, exist_ok=True)
+        
         self.session_url = None
         
     def check_network_connectivity(self):
@@ -61,9 +94,9 @@ class WiFiWebScraper:
     def setup_driver(self):
         """Setup Chrome driver with enhanced network handling"""
         try:
-            # Setup download directory
-            today = datetime.now().strftime("%d%B").lower()
-            self.download_dir = CSV_DIR / today
+            # Setup directories with dynamic date
+            today = datetime.now().strftime("%d%b").lower()  # e.g., "04aug", "29feb" (leap year)
+            self.download_dir = Path(f"EHC_Data/{today}")
             self.download_dir.mkdir(parents=True, exist_ok=True)
             
             # Chrome options with enhanced network settings

@@ -9,11 +9,16 @@ import sys
 import time
 import logging
 import threading
-from pathlib import Path
-from typing import Dict, Any, Optional
 import win32serviceutil
 import win32service
 import win32event
+import win32api
+import win32gui
+import win32con
+from pathlib import Path
+import subprocess
+import json
+from datetime import datetime, timedelta
 import servicemanager
 import pystray
 from PIL import Image, ImageDraw
@@ -23,134 +28,402 @@ import winreg
 sys.path.append('.')
 from modules.advanced_scheduler import AdvancedScheduler
 from corrected_wifi_app import CorrectedWiFiApp
+from modules.vbs_integration import VBSApplicationAutomation
+from modules.excel_generator import ExcelGenerator
+from modules.email_service import EmailService
 
 class WiFiAutomationService(win32serviceutil.ServiceFramework):
-    """Windows Service for WiFi Automation"""
+    """Windows Service for WiFi Automation that runs in background even when PC is locked"""
     
     _svc_name_ = "WiFiAutomationService"
     _svc_display_name_ = "WiFi Data Automation Service"
-    _svc_description_ = "Automated WiFi data collection and Excel generation service"
+    _svc_description_ = "Automated WiFi data collection and VBS integration service"
     
     def __init__(self, args):
         win32serviceutil.ServiceFramework.__init__(self, args)
         self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
-        self.logger = self._setup_logging()
+        self.running = True
         self.scheduler = None
-        self.wifi_app = None
-        self.running = False
+        self.setup_logging()
         
-    def _setup_logging(self) -> logging.Logger:
-        """Setup logging for Windows service"""
-        logger = logging.getLogger("WiFiAutomationService")
-        logger.setLevel(logging.INFO)
+        # Service configuration
+        self.config = {
+            "service_name": self._svc_name_,
+            "project_root": str(Path(__file__).parent.parent),
+            "log_file": str(Path(__file__).parent.parent / "logs" / "service.log"),
+            "slots": {
+                "morning": "09:30",
+                "evening": "13:00"
+            },
+            "merge_delay_minutes": 5,
+            "enable_vbs": True,
+            "enable_email": True
+        }
         
-        # Create logs directory
-        log_dir = Path("logs")
+        self.logger.info(f"WiFi Automation Service initialized at {datetime.now()}")
+    
+    def setup_logging(self):
+        """Setup logging for the service"""
+        log_dir = Path(__file__).parent.parent / "logs"
         log_dir.mkdir(exist_ok=True)
         
-        # File handler
-        log_file = log_dir / "wifi_automation_service.log"
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setLevel(logging.INFO)
+        log_file = log_dir / "service.log"
         
-        # Formatter
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        file_handler.setFormatter(formatter)
+        # Configure logging
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(log_file, encoding='utf-8'),
+                logging.StreamHandler()
+            ]
+        )
         
-        logger.addHandler(file_handler)
+        self.logger = logging.getLogger(self._svc_name_)
         
-        return logger
+        # Also log to Windows Event Log
+        servicemanager.LogMsg(
+            servicemanager.EVENTLOG_INFORMATION_TYPE,
+            servicemanager.PYS_SERVICE_STARTED,
+            (self._svc_name_, '')
+        )
     
     def SvcStop(self):
         """Stop the service"""
         self.logger.info("Service stop requested")
         self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
-        win32event.SetEvent(self.hWaitStop)
-        self.running = False
         
-        # Stop scheduler
+        # Stop the scheduler
         if self.scheduler:
-            self.scheduler.stop_scheduler()
-            
+            try:
+                self.scheduler.shutdown()
+                self.logger.info("Scheduler stopped")
+            except Exception as e:
+                self.logger.error(f"Error stopping scheduler: {e}")
+        
+        # Signal the service to stop
+        self.running = False
+        win32event.SetEvent(self.hWaitStop)
+        
         self.logger.info("Service stopped")
+        servicemanager.LogMsg(
+            servicemanager.EVENTLOG_INFORMATION_TYPE,
+            servicemanager.PYS_SERVICE_STOPPED,
+            (self._svc_name_, '')
+        )
     
     def SvcDoRun(self):
-        """Run the service"""
-        self.logger.info("Service starting")
-        servicemanager.LogMsg(servicemanager.EVENTLOG_INFORMATION_TYPE,
-                            servicemanager.PYS_SERVICE_STARTED,
-                            (self._svc_name_, ''))
+        """Main service execution"""
+        self.logger.info("Service starting...")
         
-        self.running = True
-        self.main()
-    
-    def main(self):
-        """Main service logic"""
         try:
-            self.logger.info("Initializing WiFi automation service")
+            # Initialize components
+            self.initialize_components()
             
-            # Initialize scheduler
-            self.scheduler = AdvancedScheduler()
+            # Start the scheduler
+            self.start_scheduler()
             
-            # Initialize WiFi app
-            self.wifi_app = CorrectedWiFiApp()
-            
-            # Set up callbacks
-            self.scheduler.set_download_callback(self._wifi_download_callback)
-            self.scheduler.set_merge_callback(self._merge_callback)
-            
-            # Start scheduler
-            if self.scheduler.start_scheduler():
-                self.logger.info("Scheduler started successfully")
-            else:
-                self.logger.error("Failed to start scheduler")
-                return
-            
-            self.logger.info("WiFi automation service is running")
-            
-            # Wait for stop signal
-            while self.running:
-                rc = win32event.WaitForSingleObject(self.hWaitStop, 1000)
-                if rc == win32event.WAIT_OBJECT_0:
-                    break
+            # Service main loop
+            self.service_main_loop()
             
         except Exception as e:
             self.logger.error(f"Service error: {e}")
-            servicemanager.LogErrorMsg(f"Service error: {e}")
+            servicemanager.LogMsg(
+                servicemanager.EVENTLOG_ERROR_TYPE,
+                servicemanager.PYS_SERVICE_STOPPED,
+                (self._svc_name_, str(e))
+            )
     
-    def _wifi_download_callback(self, slot_name: str) -> Dict[str, Any]:
-        """Callback for WiFi download execution"""
+    def initialize_components(self):
+        """Initialize all automation components"""
+        self.logger.info("Initializing automation components...")
+        
+        # Initialize WiFi automation
+        self.wifi_app = CorrectedWiFiApp()
+        self.logger.info("WiFi automation initialized")
+        
+        # Initialize Excel generator
+        self.excel_generator = ExcelGenerator()
+        self.logger.info("Excel generator initialized")
+        
+        # Initialize VBS automation if enabled
+        if self.config.get("enable_vbs", True):
+            self.vbs_automation = VBSApplicationAutomation()
+            self.logger.info("VBS automation initialized")
+        
+        # Initialize email service if enabled
+        if self.config.get("enable_email", True):
+            self.email_service = EmailService()
+            self.logger.info("Email service initialized")
+        
+        self.logger.info("All components initialized successfully")
+    
+    def start_scheduler(self):
+        """Start the advanced scheduler"""
+        self.logger.info("Starting scheduler...")
+        
+        # Create scheduler with callbacks
+        self.scheduler = AdvancedScheduler(
+            slot_1_time=self.config["slots"]["morning"],
+            slot_2_time=self.config["slots"]["evening"],
+            merge_delay_minutes=self.config["merge_delay_minutes"],
+            wifi_callback=self.wifi_download_callback,
+            merge_callback=self.merge_and_process_callback
+        )
+        
+        # Start scheduler in background thread
+        scheduler_thread = threading.Thread(target=self.scheduler.start_scheduler, daemon=True)
+        scheduler_thread.start()
+        
+        self.logger.info("Scheduler started successfully")
+    
+    def wifi_download_callback(self, slot_name: str):
+        """Callback for WiFi download operations"""
+        self.logger.info(f"Starting WiFi download for {slot_name} slot")
+        
         try:
-            self.logger.info(f"Executing WiFi download for {slot_name} slot")
+            # Run WiFi automation
+            result = self.wifi_app.run_corrected_automation()
             
-            # Execute WiFi automation
-            result = self.wifi_app.execute_complete_workflow()
-            
-            if result.get("success", False):
-                files_downloaded = result.get("files_downloaded", 0)
-                self.logger.info(f"WiFi download completed: {files_downloaded} files")
-                return {"success": True, "files_downloaded": files_downloaded}
+            if result.get('success', False):
+                files_downloaded = result.get('files_downloaded', 0)
+                self.logger.info(f"WiFi download completed: {files_downloaded} files downloaded")
+                
+                # Log to Windows Event Log
+                servicemanager.LogMsg(
+                    servicemanager.EVENTLOG_INFORMATION_TYPE,
+                    servicemanager.PYS_SERVICE_STARTED,
+                    (f"WiFi Download {slot_name}", f"{files_downloaded} files downloaded")
+                )
+                
+                return True
             else:
-                error_msg = result.get("error", "Unknown error")
-                self.logger.error(f"WiFi download failed: {error_msg}")
-                return {"success": False, "error": error_msg}
+                self.logger.error(f"WiFi download failed for {slot_name}")
+                return False
                 
         except Exception as e:
-            error_msg = f"WiFi download callback error: {e}"
-            self.logger.error(error_msg)
-            return {"success": False, "error": error_msg}
+            self.logger.error(f"WiFi download error: {e}")
+            return False
     
-    def _merge_callback(self, result: Dict[str, Any]):
-        """Callback for merge completion"""
+    def merge_and_process_callback(self):
+        """Callback for Excel merge and VBS processing"""
+        self.logger.info("Starting merge and processing operations")
+        
         try:
-            self.logger.info("Excel merge completed successfully")
-            self.logger.info(f"Excel file: {result.get('file_path', 'N/A')}")
+            # Step 1: Generate Excel file
+            self.logger.info("Generating Excel file...")
+            excel_result = self.excel_generator.create_excel_from_csv_files()
             
-            # Here you could add additional post-merge actions
-            # like email notifications, file uploads, etc.
+            if not excel_result.get('success', False):
+                self.logger.error("Excel generation failed")
+                return False
+            
+            excel_file = excel_result.get('excel_file')
+            self.logger.info(f"Excel file generated: {excel_file}")
+            
+            # Step 2: VBS automation if enabled
+            if self.config.get("enable_vbs", True):
+                self.logger.info("Starting VBS automation...")
+                vbs_result = self.vbs_automation.run_complete_automation()
+                
+                if vbs_result.get('success', False):
+                    self.logger.info("VBS automation completed successfully")
+                    pdf_file = vbs_result.get('pdf_file')
+                    
+                    # Step 3: Email notification if enabled
+                    if self.config.get("enable_email", True) and pdf_file:
+                        self.logger.info("Sending email notification...")
+                        email_result = self.email_service.send_report_email(pdf_file)
+                        
+                        if email_result.get('success', False):
+                            self.logger.info("Email sent successfully")
+                        else:
+                            self.logger.warning("Email sending failed")
+                else:
+                    self.logger.error("VBS automation failed")
+            
+            # Log completion to Windows Event Log
+            servicemanager.LogMsg(
+                servicemanager.EVENTLOG_INFORMATION_TYPE,
+                servicemanager.PYS_SERVICE_STARTED,
+                ("Daily Processing", "Excel merge and VBS processing completed")
+            )
+            
+            return True
             
         except Exception as e:
-            self.logger.error(f"Merge callback error: {e}")
+            self.logger.error(f"Merge and processing error: {e}")
+            return False
+    
+    def service_main_loop(self):
+        """Main service loop"""
+        self.logger.info("Service main loop started")
+        
+        # Wait for stop signal or run indefinitely
+        while self.running:
+            # Wait for stop event (timeout every 60 seconds to check status)
+            result = win32event.WaitForSingleObject(self.hWaitStop, 60000)  # 60 seconds
+            
+            if result == win32event.WAIT_OBJECT_0:
+                # Stop event was signaled
+                break
+            elif result == win32event.WAIT_TIMEOUT:
+                # Timeout - continue running (this is normal)
+                self.logger.debug("Service heartbeat - still running")
+                continue
+            else:
+                # Some other result - log and continue
+                self.logger.warning(f"Unexpected wait result: {result}")
+                continue
+        
+        self.logger.info("Service main loop ended")
+
+class WiFiAutomationServiceManager:
+    """Service management utilities"""
+    
+    def __init__(self):
+        self.service_name = WiFiAutomationService._svc_name_
+        self.logger = logging.getLogger("ServiceManager")
+    
+    def install_service(self):
+        """Install the Windows service"""
+        try:
+            # Install the service
+            win32serviceutil.InstallService(
+                WiFiAutomationService._svc_reg_class_,
+                WiFiAutomationService._svc_name_,
+                WiFiAutomationService._svc_display_name_,
+                description=WiFiAutomationService._svc_description_
+            )
+            
+            # Set service to start automatically
+            self.set_service_startup_type('auto')
+            
+            print(f"✅ Service '{self.service_name}' installed successfully")
+            print("   Service will start automatically with Windows")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Service installation failed: {e}")
+            return False
+    
+    def uninstall_service(self):
+        """Uninstall the Windows service"""
+        try:
+            # Stop service if running
+            self.stop_service()
+            
+            # Uninstall the service
+            win32serviceutil.RemoveService(self.service_name)
+            print(f"✅ Service '{self.service_name}' uninstalled successfully")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Service uninstallation failed: {e}")
+            return False
+    
+    def start_service(self):
+        """Start the Windows service"""
+        try:
+            win32serviceutil.StartService(self.service_name)
+            print(f"✅ Service '{self.service_name}' started successfully")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Service start failed: {e}")
+            return False
+    
+    def stop_service(self):
+        """Stop the Windows service"""
+        try:
+            win32serviceutil.StopService(self.service_name)
+            print(f"✅ Service '{self.service_name}' stopped successfully")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Service stop failed: {e}")
+            return False
+    
+    def restart_service(self):
+        """Restart the Windows service"""
+        try:
+            self.stop_service()
+            time.sleep(2)
+            self.start_service()
+            print(f"✅ Service '{self.service_name}' restarted successfully")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Service restart failed: {e}")
+            return False
+    
+    def get_service_status(self):
+        """Get the current service status"""
+        try:
+            status = win32serviceutil.QueryServiceStatus(self.service_name)
+            status_map = {
+                win32service.SERVICE_STOPPED: "Stopped",
+                win32service.SERVICE_START_PENDING: "Starting",
+                win32service.SERVICE_STOP_PENDING: "Stopping", 
+                win32service.SERVICE_RUNNING: "Running",
+                win32service.SERVICE_CONTINUE_PENDING: "Continuing",
+                win32service.SERVICE_PAUSE_PENDING: "Pausing",
+                win32service.SERVICE_PAUSED: "Paused"
+            }
+            
+            current_status = status_map.get(status[1], f"Unknown ({status[1]})")
+            print(f"Service Status: {current_status}")
+            return current_status
+            
+        except Exception as e:
+            print(f"❌ Failed to get service status: {e}")
+            return "Unknown"
+    
+    def set_service_startup_type(self, startup_type: str):
+        """Set service startup type (auto, manual, disabled)"""
+        try:
+            import win32service
+            
+            startup_map = {
+                'auto': win32service.SERVICE_AUTO_START,
+                'manual': win32service.SERVICE_DEMAND_START,
+                'disabled': win32service.SERVICE_DISABLED
+            }
+            
+            if startup_type not in startup_map:
+                raise ValueError(f"Invalid startup type: {startup_type}")
+            
+            # Open service manager
+            scm = win32service.OpenSCManager(None, None, win32service.SC_MANAGER_ALL_ACCESS)
+            
+            # Open service
+            service = win32service.OpenService(scm, self.service_name, win32service.SERVICE_ALL_ACCESS)
+            
+            # Change service configuration
+            win32service.ChangeServiceConfig(
+                service,
+                win32service.SERVICE_NO_CHANGE,  # serviceType
+                startup_map[startup_type],       # startType
+                win32service.SERVICE_NO_CHANGE,  # errorControl
+                None,                            # binaryPathName
+                None,                            # loadOrderGroup
+                0,                               # tagId
+                None,                            # dependencies
+                None,                            # serviceStartName
+                None,                            # password
+                None                             # displayName
+            )
+            
+            # Close handles
+            win32service.CloseServiceHandle(service)
+            win32service.CloseServiceHandle(scm)
+            
+            print(f"✅ Service startup type set to: {startup_type}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Failed to set startup type: {e}")
+            return False
 
 class SystemTrayApp:
     """System tray application for monitoring and control"""
@@ -490,9 +763,11 @@ if __name__ == "__main__":
     if len(sys.argv) == 1:
         # If no arguments, try to run as service
         try:
-            win32serviceutil.HandleCommandLine(WiFiAutomationService)
+            servicemanager.Initialize()
+            servicemanager.PrepareToHostSingle(WiFiAutomationService)
+            servicemanager.StartServiceCtrlDispatcher()
         except Exception as e:
-            print(f"Service error: {e}")
+            print(f"Service execution error: {e}")
             main()
     else:
         main()

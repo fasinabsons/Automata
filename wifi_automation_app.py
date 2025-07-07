@@ -11,6 +11,7 @@ import logging
 import argparse
 from pathlib import Path
 from typing import Dict, Any, Optional
+from datetime import datetime
 
 # Add current directory to path
 sys.path.append('.')
@@ -19,7 +20,8 @@ sys.path.append('.')
 from modules.advanced_scheduler import AdvancedScheduler
 from modules.excel_generator import EnhancedExcelGenerator
 from modules.windows_service import SystemTrayApp, WindowsIntegration
-from modules.vbs_integration import VBSIntegration
+from modules.vbs_integration import VBSApplicationAutomation
+from modules.email_service import EmailService
 from corrected_wifi_app import CorrectedWiFiApp
 
 class WiFiAutomationApp:
@@ -29,9 +31,15 @@ class WiFiAutomationApp:
         self.logger = self._setup_logging()
         self.scheduler = AdvancedScheduler()
         self.excel_generator = EnhancedExcelGenerator()
-        self.vbs_automation = VBSIntegration()
+        self.vbs_automation = VBSApplicationAutomation()
+        self.email_service = EmailService()
         self.wifi_app = CorrectedWiFiApp()
         self.running = False
+        
+        # Setup directories with dynamic date
+        today = datetime.now().strftime("%d%B").lower()  # e.g., "04january", "29february" (leap year)
+        self.csv_dir = Path(f"EHC_Data/{today}")
+        self.csv_dir.mkdir(parents=True, exist_ok=True)
         
         self.logger.info("WiFi Automation App initialized")
     
@@ -75,12 +83,6 @@ class WiFiAutomationApp:
         try:
             self.logger.info(f"🚀 Executing WiFi download for {slot_name} slot")
             
-            # Create date-specific directory
-            from datetime import datetime
-            today = datetime.now().strftime("%d%B").lower()  # e.g., "04july"
-            csv_dir = Path(f"EHC_Data/{today}")
-            csv_dir.mkdir(parents=True, exist_ok=True)
-            
             # Execute WiFi automation
             result = self.wifi_app.run_corrected_automation()
             
@@ -89,14 +91,14 @@ class WiFiAutomationApp:
                 self.logger.info(f"✅ {slot_name} slot completed: {files_downloaded} files downloaded")
                 
                 # Count actual CSV files
-                csv_files = list(csv_dir.glob("*.csv"))
+                csv_files = list(self.csv_dir.glob("*.csv"))
                 actual_files = len(csv_files)
                 
                 return {
                     "success": True, 
                     "files_downloaded": actual_files,
                     "slot_name": slot_name,
-                    "csv_directory": str(csv_dir)
+                    "csv_directory": str(self.csv_dir)
                 }
             else:
                 error_msg = result.get("error", "Unknown error")
@@ -123,7 +125,7 @@ class WiFiAutomationApp:
                 self.logger.info("⏰ Note: VBS processing can take 5-30 minutes for import and up to 1 hour for updates")
                 
                 # Upload Excel to VBS application and generate PDF
-                vbs_result = self.vbs_automation.execute_full_vbs_workflow(str(excel_file_path))
+                vbs_result = self.vbs_automation.run_complete_automation()
                 
                 if vbs_result.get("success", False):
                     self.logger.info("✅ VBS workflow completed successfully")
@@ -132,6 +134,19 @@ class WiFiAutomationApp:
                     
                     if vbs_result.get("report_path"):
                         self.logger.info(f"📄 PDF saved to: {vbs_result.get('report_path')}")
+                        
+                        # Send PDF report via email
+                        self.logger.info("📧 Sending PDF report via email")
+                        email_result = self.email_service.send_pdf_report(Path(vbs_result.get('report_path')))
+                        
+                        if email_result.get("success", False):
+                            self.logger.info("✅ PDF report sent via email successfully")
+                            result["email_sent"] = True
+                            result["email_recipients"] = email_result.get("recipients", [])
+                        else:
+                            self.logger.error(f"❌ Failed to send PDF report via email: {email_result.get('error', 'Unknown error')}")
+                            result["email_sent"] = False
+                            result["email_error"] = email_result.get("error")
                     
                     # Update result with VBS information
                     result["vbs_upload_success"] = True
@@ -156,8 +171,6 @@ class WiFiAutomationApp:
     def _log_daily_summary(self, excel_result: Dict[str, Any]):
         """Log daily summary statistics"""
         try:
-            from datetime import datetime
-            
             status = self.scheduler.get_status()
             daily_status = status.get("daily_status", {})
             
@@ -249,6 +262,140 @@ class WiFiAutomationApp:
             "excel_generator_available": True,
             "wifi_app_available": True
         }
+    
+    def setup_windows_integration(self):
+        """Setup robust Windows integration for 365-366 day operation"""
+        try:
+            self.logger.info("Setting up robust Windows integration...")
+            
+            # Create Windows startup entry
+            if self._create_windows_startup_entry():
+                self.logger.info("✅ Windows startup entry created successfully")
+            else:
+                self.logger.warning("❌ Failed to create Windows startup entry")
+            
+            # Create Windows service entry (optional)
+            if self._create_windows_service():
+                self.logger.info("✅ Windows service created successfully")
+            else:
+                self.logger.warning("❌ Failed to create Windows service")
+                
+            # Configure Windows power settings
+            if self._configure_power_settings():
+                self.logger.info("✅ Power settings configured successfully")
+            else:
+                self.logger.warning("❌ Failed to configure power settings")
+                
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Windows integration setup failed: {e}")
+            return False
+    
+    def _create_windows_startup_entry(self):
+        """Create Windows startup registry entry"""
+        try:
+            import winreg
+            import sys
+            
+            # Get current script path
+            script_path = os.path.abspath(__file__)
+            python_exe = sys.executable
+            
+            # Create startup command
+            startup_cmd = f'"{python_exe}" "{script_path}" --background'
+            
+            # Registry key for current user startup
+            reg_key = winreg.HKEY_CURRENT_USER
+            reg_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            
+            # Open registry key
+            with winreg.OpenKey(reg_key, reg_path, 0, winreg.KEY_SET_VALUE) as key:
+                winreg.SetValueEx(key, "WiFiAutomation", 0, winreg.REG_SZ, startup_cmd)
+            
+            self.logger.info(f"Startup registry entry created: {startup_cmd}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create startup entry: {e}")
+            return False
+    
+    def _create_windows_service(self):
+        """Create Windows service for robust operation"""
+        try:
+            import subprocess
+            import sys
+            
+            # Create service using sc command
+            service_name = "WiFiAutomationService"
+            script_path = os.path.abspath(__file__)
+            python_exe = sys.executable
+            
+            # Service command
+            service_cmd = f'"{python_exe}" "{script_path}" --service'
+            
+            # Create service
+            cmd = [
+                'sc', 'create', service_name,
+                'binPath=', service_cmd,
+                'start=', 'auto',
+                'DisplayName=', 'WiFi Automation Service'
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, shell=True)
+            
+            if result.returncode == 0:
+                self.logger.info(f"Windows service created: {service_name}")
+                return True
+            else:
+                self.logger.warning(f"Service creation failed: {result.stderr}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Failed to create Windows service: {e}")
+            return False
+    
+    def _configure_power_settings(self):
+        """Configure Windows power settings for 365-366 day operation"""
+        try:
+            import subprocess
+            
+            # Power settings commands
+            power_commands = [
+                # Never sleep
+                ['powercfg', '/change', 'standby-timeout-ac', '0'],
+                ['powercfg', '/change', 'standby-timeout-dc', '0'],
+                # Never turn off display
+                ['powercfg', '/change', 'monitor-timeout-ac', '0'],
+                ['powercfg', '/change', 'monitor-timeout-dc', '0'],
+                # Never turn off hard disk
+                ['powercfg', '/change', 'disk-timeout-ac', '0'],
+                ['powercfg', '/change', 'disk-timeout-dc', '0'],
+                # Disable hibernation
+                ['powercfg', '/hibernate', 'off']
+            ]
+            
+            success_count = 0
+            for cmd in power_commands:
+                try:
+                    result = subprocess.run(cmd, capture_output=True, text=True, shell=True)
+                    if result.returncode == 0:
+                        success_count += 1
+                    else:
+                        self.logger.warning(f"Power command failed: {' '.join(cmd)}")
+                except Exception as e:
+                    self.logger.warning(f"Power command error: {e}")
+            
+            if success_count >= len(power_commands) // 2:
+                self.logger.info(f"Power settings configured ({success_count}/{len(power_commands)} commands successful)")
+                return True
+            else:
+                self.logger.warning(f"Power settings partially configured ({success_count}/{len(power_commands)} commands successful)")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Failed to configure power settings: {e}")
+            return False
 
 def main():
     """Main function with command line interface"""
@@ -278,6 +425,12 @@ def main():
     parser.add_argument("--stop-service", action="store_true", help="Stop Windows service")
     parser.add_argument("--add-startup", action="store_true", help="Add to Windows startup")
     parser.add_argument("--remove-startup", action="store_true", help="Remove from Windows startup")
+    
+    # Email testing
+    parser.add_argument('--test-email', action='store_true', help='Test email configuration')
+    parser.add_argument('--send-test-email', action='store_true', help='Send test email')
+    parser.add_argument('--email-config', action='store_true', help='Show email configuration help')
+    parser.add_argument('--complete-test', action='store_true', help='Run complete system test')
     
     args = parser.parse_args()
     
@@ -352,50 +505,85 @@ def main():
         test_vbs_upload(args.test_vbs_upload)
         return
     
-    # Handle execution modes
-    if args.console:
-        app.run_console_mode()
-    elif args.tray:
-        app.run_tray_mode()
-    else:
-        # Default behavior - show help and run interactive mode
-        print("🤖 WiFi Automation Application")
-        print("=" * 50)
-        print("Available modes:")
-        print("  --console     : Run in console mode")
-        print("  --tray        : Run in system tray mode")
-        print("")
-        print("Manual triggers:")
-        print("  --trigger-morning   : Trigger morning slot")
-        print("  --trigger-afternoon : Trigger afternoon slot")
-        print("  --trigger-evening   : Trigger evening slot")
-        print("  --trigger-merge     : Trigger Excel merge")
-        print("")
-        print("Testing:")
-        print("  --test-excel     : Test Excel generation")
-        print("  --test-scheduler : Test scheduler")
-        print("  --test-vbs       : Test VBS integration")
-        print("  --test-vbs-upload: Test VBS upload with specific Excel file")
-        print("  --status         : Show status")
-        print("")
-        print("Windows integration:")
-        print("  --install-service : Install Windows service")
-        print("  --add-startup     : Add to Windows startup")
-        print("")
+    elif args.test_email:
+        # Test email configuration
+        from modules.email_service import EmailService
+        email_service = EmailService()
+        result = email_service.test_email_connection()
         
-        # Ask user what they want to do
-        choice = input("What would you like to do? (console/tray/test): ").strip().lower()
-        
-        if choice == "console":
-            app.run_console_mode()
-        elif choice == "tray":
-            app.run_tray_mode()
-        elif choice == "test":
-            print("Running Excel generation test...")
-            from modules.excel_generator import test_excel_generation
-            test_excel_generation()
+        if result["success"]:
+            print("✅ Email configuration test: SUCCESS")
+            print(f"   {result['message']}")
         else:
-            print("Invalid choice. Use --help for more options.")
+            print("❌ Email configuration test: FAILED")
+            print(f"   Error: {result['error']}")
+    
+    elif args.send_test_email:
+        # Send test email
+        from modules.email_service import EmailService
+        email_service = EmailService()
+        result = email_service.send_test_email()
+        
+        if result["success"]:
+            print("✅ Test email sent successfully")
+            print(f"   Recipients: {result.get('recipients', [])}")
+        else:
+            print("❌ Failed to send test email")
+            print(f"   Error: {result['error']}")
+    
+    elif args.email_config:
+        # Show email configuration help
+        from config.email_config import print_setup_instructions, test_email_config
+        print_setup_instructions("gmail")
+        test_email_config()
+    
+    elif args.complete_test:
+        # Run complete system test
+        print("🔄 Running complete system test...")
+        app = WiFiAutomationApp()
+        
+        # Test WiFi download
+        print("\n1. Testing WiFi download...")
+        wifi_result = app._wifi_download_callback("test")
+        if wifi_result.get("success"):
+            print("✅ WiFi download: SUCCESS")
+        else:
+            print("❌ WiFi download: FAILED")
+        
+        # Test Excel generation
+        print("\n2. Testing Excel generation...")
+        excel_result = app._merge_callback(None)
+        if excel_result.get("success"):
+            print("✅ Excel generation: SUCCESS")
+        else:
+            print("❌ Excel generation: FAILED")
+        
+        # Test email if PDF exists
+        if excel_result.get("vbs_pdf_path"):
+            print("\n3. Testing email delivery...")
+            email_result = app.email_service.send_pdf_report(Path(excel_result["vbs_pdf_path"]))
+            if email_result.get("success"):
+                print("✅ Email delivery: SUCCESS")
+            else:
+                print("❌ Email delivery: FAILED")
+        
+        print("\n🏁 Complete system test finished")
+    
+    elif args.console:
+        # Console mode
+        print("🖥️  Starting WiFi Automation in console mode...")
+        app = WiFiAutomationApp()
+        app.run_console_mode()
+    
+    elif args.tray:
+        # System tray mode
+        print("📋 Starting WiFi Automation in system tray mode...")
+        app = WiFiAutomationApp()
+        app.run_tray_mode()
+    
+    else:
+        # Default: show help
+        parser.print_help()
 
 if __name__ == "__main__":
     main()

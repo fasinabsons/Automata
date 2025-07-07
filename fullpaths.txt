@@ -1,0 +1,156 @@
+//JSpath, Xpath,Html,FullXPath,Copied element for all the components we need to click to make sure everything is accurate also neglect ssl forever since this website will never ever get an ssl even if ssl is there or not our app must work efficiently and be most reliable and better.
+Wireless LANs
+copied element
+<div id="title-1343-textEl" data-ref="textEl" class="x-title-text x-title-text-default x-title-item" unselectable="on">Wireless LANs</div>
+outerhtml
+<div id="title-1343-textEl" data-ref="textEl" class="x-title-text x-title-text-default x-title-item" unselectable="on">Wireless LANs</div>
+JSpath
+document.querySelector("#title-1343-textEl")
+Xpath
+//*[@id="title-1343-textEl"]
+FullXPath
+/html/body/div[2]/div/div/div[2]/div/div/div[1]/div[2]/div/div/div[4]/div[1]/div/div/div/div[2]
+//EHC TV
+copied element
+<div class="x-grid-cell-inner " style="text-align:left;" id="ext-element-94"><span class=" rks-clickable-column">EHC TV</span></div>
+outerhtml
+<div class="x-grid-cell-inner " style="text-align:left;" id="ext-element-94"><span class=" rks-clickable-column">EHC TV</span></div>
+JSpath
+document.querySelector("#ext-element-94")
+Xpath
+//*[@id="ext-element-94"]
+FullXPath
+/html/body/div[2]/div/div/div[3]/div[2]/div[2]/div/div/div[2]/div[1]/div/div/div/div/div/div[2]/div/div/div[1]/div/div/div/div[4]/div[1]/div/table[6]/tbody/tr/td[1]/div
+//EHC-15
+copied element
+<div class="x-grid-cell-inner " style="text-align:left;" id="ext-element-93"><span class=" rks-clickable-column">EHC-15</span></div>
+outerhtml
+<div class="x-grid-cell-inner " style="text-align:left;" id="ext-element-93"><span class=" rks-clickable-column">EHC-15</span></div>
+JSpath
+document.querySelector("#ext-element-93")
+Xpath
+//*[@id="ext-element-93"]
+FullXPath
+/html/body/div[2]/div/div/div[3]/div[2]/div[2]/div/div/div[2]/div[1]/div/div/div/div/div/div[2]/div/div/div[1]/div/div/div/div[4]/div[1]/div/table[7]/tbody/tr/td[1]/div
+//Reception Hall-Mobile
+copied element
+<div class="x-grid-cell-inner " style="text-align:left;" id="ext-element-115"><span class=" rks-clickable-column">Reception Hall-Mobile</span></div>
+outerhtml
+<div class="x-grid-cell-inner " style="text-align:left;" id="ext-element-115"><span class=" rks-clickable-column">Reception Hall-Mobile</span></div>
+JSpath
+document.querySelector("#ext-element-115")
+Xpath
+//*[@id="ext-element-115"]
+FullXPath
+/html/body/div[2]/div/div/div[3]/div[2]/div[2]/div/div/div[2]/div[1]/div/div/div/div/div/div[2]/div/div/div[1]/div/div/div/div[4]/div[1]/div/table[6]/tbody/tr/td[1]/div
+//Reception Hall-TV
+copied element
+<div class="x-grid-cell-inner " style="text-align:left;" id="ext-element-114"><span class=" rks-clickable-column">Reception Hall-TV</span></div>
+outerhtml
+<div class="x-grid-cell-inner " style="text-align:left;" id="ext-element-114"><span class=" rks-clickable-column">Reception Hall-TV</span></div>
+JSpath
+document.querySelector("#ext-element-114")
+Xpath
+//*[@id="ext-element-114"]
+FullXPath
+/html/body/div[2]/div/div/div[3]/div[2]/div[2]/div/div/div[2]/div[1]/div/div/div/div/div/div[2]/div/div/div[1]/div/div/div/div[4]/div[1]/div/table[7]/tbody/tr/td[1]/div
+//Clients
+copied element
+<a class="x-tab x-unselectable x-box-item x-tab-default x-top x-tab-top x-tab-default-top" hidefocus="on" unselectable="on" id="tab-3448" tabindex="-1" componentid="tab-3448" style="right: auto; left: 292px; top: 0px; margin: 0px;"><span id="tab-3448-btnWrap" data-ref="btnWrap" role="presentation" unselectable="on" style="" class="x-tab-wrap x-tab-wrap-default "><span id="tab-3448-btnEl" data-ref="btnEl" role="presentation" unselectable="on" style="" class="x-tab-button x-tab-button-default x-tab-text    x-tab-button-center "><span id="tab-3448-btnIconEl" data-ref="btnIconEl" role="presentation" unselectable="on" class="x-tab-icon-el x-tab-icon-el-default  " style=""></span><span id="tab-3448-btnInnerEl" data-ref="btnInnerEl" unselectable="on" class="x-tab-inner x-tab-inner-default">Clients</span></span></span></a>
+outerhtml
+<a class="x-tab x-unselectable x-box-item x-tab-default x-top x-tab-top x-tab-default-top" hidefocus="on" unselectable="on" id="tab-3448" tabindex="-1" componentid="tab-3448" style="right: auto; left: 292px; top: 0px; margin: 0px;"><span id="tab-3448-btnWrap" data-ref="btnWrap" role="presentation" unselectable="on" style="" class="x-tab-wrap x-tab-wrap-default "><span id="tab-3448-btnEl" data-ref="btnEl" role="presentation" unselectable="on" style="" class="x-tab-button x-tab-button-default x-tab-text    x-tab-button-center "><span id="tab-3448-btnIconEl" data-ref="btnIconEl" role="presentation" unselectable="on" class="x-tab-icon-el x-tab-icon-el-default  " style=""></span><span id="tab-3448-btnInnerEl" data-ref="btnInnerEl" unselectable="on" class="x-tab-inner x-tab-inner-default">Clients</span></span></span></a>
+JSpath
+document.querySelector("#tab-3448")
+Xpath
+//*[@id="tab-3448"]
+FullXPath
+/html/body/div[2]/div/div/div[3]/div[2]/div[2]/div/div/div[2]/div[1]/div/div/div/div/div/div[2]/div/div/div[2]/div/div/div/div[1]/div/div/div[1]/div[1]/div[2]/div/a[6]
+//List
+copied element
+<span id="button-1644-btnInnerEl" data-ref="btnInnerEl" unselectable="on" class="x-btn-inner x-btn-inner-default-small">List</span>
+outerhtml
+<span id="button-1644-btnInnerEl" data-ref="btnInnerEl" unselectable="on" class="x-btn-inner x-btn-inner-default-small">List</span>
+JSpath
+document.querySelector("#button-1644-btnInnerEl")
+Xpath
+//*[@id="button-1644-btnInnerEl"]
+FullXPath
+/html/body/div[2]/div/div/div[3]/div[2]/div[2]/div/div/div[1]/div[1]/div/div/div[3]/div/div/div/a[1]/span/span/span[2]
+//Download Button
+<span id="Rks-module-base-Button-3835-btnIconEl" data-ref="btnIconEl" role="presentation" unselectable="on" class="x-btn-icon-el x-btn-icon-el-default-toolbar-small  x-btn-glyph" style="font-family:FontAwesome !important;"></span>
+outerhtml
+<span id="Rks-module-base-Button-3835-btnIconEl" data-ref="btnIconEl" role="presentation" unselectable="on" class="x-btn-icon-el x-btn-icon-el-default-toolbar-small  x-btn-glyph" style="font-family:FontAwesome !important;"></span>
+JSpath
+document.querySelector("#Rks-module-base-Button-3835-btnIconEl")
+Xpath
+//*[@id="Rks-module-base-Button-3835-btnIconEl"]
+FullXPath
+/html/body/div[2]/div/div/div[3]/div[2]/div[2]/div/div/div[2]/div[1]/div/div/div/div/div/div[2]/div/div/div[2]/div/div/div/div[2]/div[2]/div/div/div/div[1]/div/div/a[7]/span/span/span[1]
+
+//page 2
+copied element
+<span id="button-3084-btnInnerEl" data-ref="btnInnerEl" unselectable="on" class="x-btn-inner x-btn-inner-plain-toolbar-small">2</span>
+outerhtml
+<span id="button-3084-btnInnerEl" data-ref="btnInnerEl" unselectable="on" class="x-btn-inner x-btn-inner-plain-toolbar-small">2</span>
+JSpath
+document.querySelector("#button-3084-btnInnerEl")
+Xpath
+//*[@id="button-3084-btnInnerEl"]
+FullXPath
+/html/body/div[2]/div/div/div[3]/div[2]/div[2]/div/div/div[2]/div[1]/div/div/div/div/div/div[2]/div/div/div[1]/div/div/div/div[6]/div/div/a[3]/span/span/span[2]
+
+
+//page 1
+copied element
+<span id="button-3082-btnInnerEl" data-ref="btnInnerEl" unselectable="on" class="x-btn-inner x-btn-inner-plain-toolbar-small">1</span>
+outerhtml
+<span id="button-3082-btnInnerEl" data-ref="btnInnerEl" unselectable="on" class="x-btn-inner x-btn-inner-plain-toolbar-small">1</span>
+JSpath
+document.querySelector("#button-3082-btnInnerEl")
+Xpath
+//*[@id="button-3082-btnInnerEl"]
+FullXPath
+/html/body/div[2]/div/div/div[3]/div[2]/div[2]/div/div/div[2]/div[1]/div/div/div/div/div/div[2]/div/div/div[1]/div/div/div/div[6]/div/div/a[2]/span/span/span[2]
+
+
+//Login
+copied element
+<input class="field loginBtn" name="commit" type="submit" data-logintxt="Login" data-loginingtxt="Logging on..." value="Login">
+outerhtml
+<input class="field loginBtn" name="commit" type="submit" data-logintxt="Login" data-loginingtxt="Logging on..." value="Login">
+JSpath
+document.querySelector("#loginForm > div.actions > input")
+Xpath
+//*[@id="loginForm"]/div[4]/input
+FullXPath
+/html/body/div[1]/form/div[4]/input
+
+//username
+copied element
+<input class="field" id="userName" name="userName" type="text" placeholder="username" autofocus="autofocus">
+outerhtml
+<input class="field" id="userName" name="userName" type="text" placeholder="username" autofocus="autofocus">
+JSpath
+document.querySelector("#userName")
+Xpath
+//*[@id="userName"]
+FullXPath
+/html/body/div[1]/form/div[3]/input[1]
+
+//password
+copied element
+<input class="field" id="password" name="password" type="password" autocomplete="off" placeholder="password">
+outerhtml
+<input class="field" id="password" name="password" type="password" autocomplete="off" placeholder="password">
+JSpath
+document.querySelector("#password")
+Xpath
+//*[@id="password"]
+FullXPath
+/html/body/div[1]/form/div[3]/input[2]
+
+
+
+
+
+//Don not break any code just make sure the code will be enhanced then only we should add this as well, else skip.
