@@ -25,6 +25,7 @@ sys.path.insert(0, str(project_root))
 from modules.dynamic_file_manager import DynamicFileManager
 from working_email_notifications import WorkingEmailNotifications
 from corrected_wifi_app import CorrectedWiFiApp  # Fast version
+from modules.efficient_vbs_controller import EfficientVBSController  # VBS automation
 
 # Configuration
 BUSINESS_HOURS_START = 9  # 9 AM
@@ -32,7 +33,7 @@ BUSINESS_HOURS_END = 17   # 5 PM
 MINIMUM_FILES_REQUIRED = 8
 
 class EnhancedWiFiServiceWithDynamicFiles:
-    """Enhanced WiFi Service with Dynamic Files and Fast Automation"""
+    """Enhanced WiFi Service with Dynamic Files, Fast Automation, and VBS Integration"""
     
     def __init__(self):
         self.running = False
@@ -55,6 +56,7 @@ class EnhancedWiFiServiceWithDynamicFiles:
         # Daily tracking
         self.daily_files_downloaded = 0
         self.excel_generated_today = False
+        self.vbs_automation_completed_today = False
         
         # Setup logging
         self.setup_logging()
@@ -65,10 +67,13 @@ class EnhancedWiFiServiceWithDynamicFiles:
         # Initialize email service
         self.email_service = WorkingEmailNotifications()
         
+        # Initialize VBS controller
+        self.vbs_controller = EfficientVBSController()
+        
         # Initialize dynamic file system
         self.initialize_dynamic_system()
         
-        self.logger.info("✅ Enhanced WiFi Service with Dynamic Files initialized")
+        self.logger.info("✅ Enhanced WiFi Service with Dynamic Files and VBS Integration initialized")
     
     def setup_logging(self):
         """Setup logging with crash logging"""
@@ -423,25 +428,39 @@ class EnhancedWiFiServiceWithDynamicFiles:
             return False
     
     def generate_excel_file(self):
-        """Generate Excel file with crash protection"""
+        """Generate Excel file from CSV files and trigger VBS automation"""
         try:
-            self.logger.info("📊 Starting Excel file generation...")
+            self.logger.info("📊 Generating Excel file from CSV files...")
             
-            # Import Excel generator
+            # Check if we have enough files
+            status = self.file_manager.get_current_date_folder_status()
+            current_files = status['csv_count']
+            
+            if current_files < self.minimum_files_required:
+                self.logger.warning(f"⚠️ Not enough files for Excel generation: {current_files}/{self.minimum_files_required}")
+                return False
+            
+            # Generate Excel file
             from modules.excel_generator import ExcelGenerator
             excel_generator = ExcelGenerator()
             
-            # Generate Excel file
             result = excel_generator.create_excel_from_csv_files()
             
             if result.get('success', False):
                 excel_file = result.get('excel_file')
-                unique_records = result.get('unique_records', 0)
-                
                 self.logger.info(f"✅ Excel file generated: {excel_file}")
-                self.logger.info(f"📊 Records processed: {unique_records}")
                 
+                # Mark Excel as generated today
                 self.excel_generated_today = True
+                
+                # Send Excel generation notification
+                self.email_service.send_excel_generation_notification(excel_file)
+                
+                # Trigger VBS automation if enabled
+                if not self.vbs_automation_completed_today:
+                    self.logger.info("🏢 Triggering VBS automation after Excel generation...")
+                    self.run_vbs_automation()
+                
                 return True
             else:
                 self.logger.error("❌ Excel generation failed")
@@ -449,19 +468,77 @@ class EnhancedWiFiServiceWithDynamicFiles:
                 
         except Exception as e:
             self.logger.error(f"❌ Excel generation error: {e}")
-            self.handle_crash(e, "Excel generation")
+            return False
+    
+    def run_vbs_automation(self):
+        """Run VBS automation with the current date folder"""
+        try:
+            self.logger.info("🏢 Starting VBS automation...")
+            
+            # Get current date folder
+            date_folder = self.file_manager.get_current_date_folder()
+            
+            # Initialize VBS controller if not already done
+            if not self.vbs_controller.is_initialized:
+                init_result = self.vbs_controller.initialize()
+                if not init_result["success"]:
+                    self.logger.error(f"❌ VBS initialization failed: {init_result['error']}")
+                    return False
+            
+            # Run complete VBS automation
+            vbs_result = self.vbs_controller.run_complete_vbs_automation(date_folder)
+            
+            if vbs_result["success"]:
+                self.logger.info("✅ VBS automation completed successfully")
+                self.vbs_automation_completed_today = True
+                
+                # Send success notification with PDF
+                pdf_file = vbs_result.get("pdf_file")
+                if pdf_file:
+                    self.email_service.send_vbs_completion_notification(pdf_file, date_folder)
+                
+                return True
+            else:
+                self.logger.error(f"❌ VBS automation failed: {vbs_result['errors']}")
+                
+                # Send failure notification
+                self.email_service.send_vbs_failure_notification(vbs_result['errors'], date_folder)
+                
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"❌ VBS automation error: {e}")
+            
+            # Send error notification
+            self.email_service.send_vbs_error_notification(str(e))
+            
+            return False
+    
+    def check_vbs_automation_status(self) -> bool:
+        """Check if VBS automation is available and ready"""
+        try:
+            return self.vbs_controller.is_vbs_available()
+        except Exception as e:
+            self.logger.error(f"❌ VBS status check failed: {e}")
             return False
     
     def reset_daily_counters(self):
         """Reset daily counters at midnight"""
         try:
             self.logger.info("🔄 Resetting daily counters...")
+            
+            # Reset counters
             self.daily_files_downloaded = 0
             self.excel_generated_today = False
-            self.crash_count = 0  # Reset crash count daily
-            self.logger.info("✅ Daily counters reset")
+            self.vbs_automation_completed_today = False
+            
+            # Create new daily folder
+            self.create_daily_folder()
+            
+            self.logger.info("✅ Daily counters reset successfully")
+            
         except Exception as e:
-            self.logger.error(f"❌ Failed to reset counters: {e}")
+            self.logger.error(f"❌ Daily counter reset failed: {e}")
     
     def schedule_tasks(self):
         """Schedule regular FAST tasks - DAY ONLY (no night downloads)"""
@@ -606,10 +683,12 @@ class EnhancedWiFiServiceWithDynamicFiles:
                 "last_successful_run": self.last_successful_run.isoformat() if self.last_successful_run else None,
                 "daily_files_downloaded": self.daily_files_downloaded,
                 "excel_generated_today": self.excel_generated_today,
+                "vbs_automation_completed_today": self.vbs_automation_completed_today,
                 "scheduled_jobs": len(schedule.jobs),
                 "file_system_status": self.file_manager.get_current_date_folder_status(),
                 "business_hours": self.is_business_hours(),
-                "automation_type": "FAST"
+                "automation_type": "FAST + VBS",
+                "vbs_available": self.check_vbs_automation_status()
             }
             
             return status

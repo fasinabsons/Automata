@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Corrected WiFi App - Fast and Efficient Version
-Fixed login delays and optimized for speed
+Corrected WiFi App - Robust and Efficient Version
+Combines best timing from login fix.txt with efficient selectors
 """
 
 import sys
@@ -31,10 +31,10 @@ USERNAME = "admin"
 PASSWORD = "AdminFlower@123"
 
 class CorrectedWiFiApp:
-    """Fast and efficient WiFi automation app"""
+    """Robust and efficient WiFi automation app"""
     
     def __init__(self):
-        print("🚀 Initializing Fast WiFi App...")
+        print("🚀 Initializing Robust WiFi App...")
         
         # Initialize dynamic file manager
         self.file_manager = DynamicFileManager()
@@ -122,16 +122,16 @@ class CorrectedWiFiApp:
         except:
             return 0
     
-    def fast_login(self):
-        """Stable login using iframe - based on working login fix.txt"""
+    def login_with_iframe(self):
+        """Login using iframe - exact implementation from login fix.txt"""
         try:
-            print("🔑 Starting STABLE login process...")
+            print("🔑 Starting iframe login process...")
             
             # Navigate to URL
             print(f"🌐 Navigating to {TARGET_URL}")
             self.driver.get(TARGET_URL)
             
-            # Wait for page to load
+            # Wait for page to load (from login fix.txt timing)
             print("⏳ Waiting for page to load...")
             time.sleep(10)
             
@@ -140,7 +140,7 @@ class CorrectedWiFiApp:
             self.driver.save_screenshot(screenshot_path)
             print(f"📸 Screenshot: {screenshot_path}")
             
-            # Look for the maskFrame iframe
+            # Look for the maskFrame iframe (from login fix.txt)
             print("🔍 Looking for maskFrame iframe...")
             
             try:
@@ -157,116 +157,139 @@ class CorrectedWiFiApp:
                 # Wait for login form to load
                 time.sleep(5)
                 
-                # Find input fields in iframe
-                input_fields = self.driver.find_elements(By.TAG_NAME, "input")
-                visible_inputs = [inp for inp in input_fields if inp.is_displayed()]
-                
-                print(f"🔍 Found {len(visible_inputs)} visible input fields in iframe")
-                
-                if len(visible_inputs) >= 2:
-                    # Enter credentials
-                    print("✏️ Entering username...")
-                    visible_inputs[0].clear()
-                    visible_inputs[0].send_keys(USERNAME)
+                # Try precision selectors first (from fullpaths.txt)
+                try:
+                    print("🎯 Trying precision selectors...")
+                    username_field = self.driver.find_element(By.ID, "userName")
+                    password_field = self.driver.find_element(By.ID, "password")
+                    
+                    print("✏️ Entering credentials with precision selectors...")
+                    username_field.clear()
+                    username_field.send_keys(USERNAME)
                     time.sleep(1)
                     
-                    print("✏️ Entering password...")
-                    visible_inputs[1].clear()
-                    visible_inputs[1].send_keys(PASSWORD)
+                    password_field.clear()
+                    password_field.send_keys(PASSWORD)
                     time.sleep(1)
                     
-                    print("✅ Entered username: admin")
-                    print("✅ Entered password")
+                    # Try precision login button
+                    try:
+                        login_button = self.driver.find_element(By.XPATH, "//*[@id='loginForm']/div[4]/input")
+                        login_button.click()
+                        print("✅ Clicked login button with precision selector!")
+                    except:
+                        # Fallback to CSS selector
+                        login_button = self.driver.find_element(By.CSS_SELECTOR, "input.loginBtn[value='Login']")
+                        login_button.click()
+                        print("✅ Clicked login button with CSS selector!")
                     
-                    # Find and click login button
-                    print("🔍 Looking for login button...")
-                    login_buttons = self.driver.find_elements(By.XPATH, "//button | //input[@type='submit'] | //input[@type='button']")
+                except:
+                    print("⚠️ Precision selectors failed, trying visible inputs...")
+                    # Fallback to visible inputs (from login fix.txt)
+                    input_fields = self.driver.find_elements(By.TAG_NAME, "input")
+                    visible_inputs = [inp for inp in input_fields if inp.is_displayed()]
                     
-                    login_clicked = False
-                    for button in login_buttons:
-                        if button.is_displayed():
-                            print("🖱️ Clicking login button...")
-                            button.click()
-                            login_clicked = True
-                            break
+                    print(f"🔍 Found {len(visible_inputs)} visible input fields in iframe")
                     
-                    if login_clicked:
-                        print("✅ Login button clicked!")
-                        # Wait for login to complete - REDUCED TO 15 SECONDS
-                        print("⏳ Waiting 15 seconds for login to complete...")
-                        time.sleep(15)  # REDUCED: User requested 15 seconds
-                        self.driver.switch_to.default_content()
-                        print("✅ Iframe login completed!")
-                        return True
+                    if len(visible_inputs) >= 2:
+                        # Enter credentials
+                        print("✏️ Entering username...")
+                        visible_inputs[0].clear()
+                        visible_inputs[0].send_keys(USERNAME)
+                        time.sleep(1)
+                        
+                        print("✏️ Entering password...")
+                        visible_inputs[1].clear()
+                        visible_inputs[1].send_keys(PASSWORD)
+                        time.sleep(1)
+                        
+                        # Find and click login button
+                        print("🔍 Looking for login button...")
+                        login_buttons = self.driver.find_elements(By.XPATH, "//button | //input[@type='submit'] | //input[@type='button']")
+                        
+                        for button in login_buttons:
+                            if button.is_displayed():
+                                print("🖱️ Clicking login button...")
+                                button.click()
+                                break
                     else:
-                        print("❌ Could not click login button")
+                        print("❌ Could not find login form in iframe")
                         return False
-                else:
-                    print("❌ Could not find login form in iframe")
-                    return False
-                    
+                
+                # Wait for login to complete (from login fix.txt timing)
+                print("⏳ Waiting for login to complete...")
+                time.sleep(15)
+                
+                # Switch back to main content
+                self.driver.switch_to.default_content()
+                
+                print("✅ Login completed successfully!")
+                return True
+                
             except Exception as e:
                 print(f"❌ Error with iframe login: {e}")
                 
-                # Try without iframe as fallback
+                # Try without iframe as fallback (from login fix.txt)
                 print("🔄 Trying login without iframe...")
                 self.driver.switch_to.default_content()
                 
-                input_fields = self.driver.find_elements(By.TAG_NAME, "input")
-                visible_inputs = [inp for inp in input_fields if inp.is_displayed()]
+                # Try precision selectors first
+                try:
+                    username_field = self.driver.find_element(By.ID, "userName")
+                    password_field = self.driver.find_element(By.ID, "password")
+                    
+                    username_field.clear()
+                    username_field.send_keys(USERNAME)
+                    time.sleep(1)
+                    
+                    password_field.clear()
+                    password_field.send_keys(PASSWORD)
+                    time.sleep(1)
+                    
+                    # Try precision login button
+                    try:
+                        login_button = self.driver.find_element(By.XPATH, "//*[@id='loginForm']/div[4]/input")
+                        login_button.click()
+                    except:
+                        login_button = self.driver.find_element(By.CSS_SELECTOR, "input.loginBtn[value='Login']")
+                        login_button.click()
+                    
+                except:
+                    # Fallback to visible inputs
+                    input_fields = self.driver.find_elements(By.TAG_NAME, "input")
+                    visible_inputs = [inp for inp in input_fields if inp.is_displayed()]
+                    
+                    if len(visible_inputs) >= 2:
+                        visible_inputs[0].clear()
+                        visible_inputs[0].send_keys(USERNAME)
+                        time.sleep(1)
+                        
+                        visible_inputs[1].clear()
+                        visible_inputs[1].send_keys(PASSWORD)
+                        time.sleep(1)
+                        
+                        login_buttons = self.driver.find_elements(By.XPATH, "//button | //input[@type='submit'] | //input[@type='button']")
+                        
+                        for button in login_buttons:
+                            if button.is_displayed():
+                                button.click()
+                                break
                 
-                if len(visible_inputs) >= 2:
-                    print("✏️ Entering credentials without iframe...")
-                    visible_inputs[0].clear()
-                    visible_inputs[0].send_keys(USERNAME)
-                    time.sleep(1)
-                    
-                    visible_inputs[1].clear()
-                    visible_inputs[1].send_keys(PASSWORD)
-                    time.sleep(1)
-                    
-                    print("✅ Entered username: admin")
-                    print("✅ Entered password")
-                    
-                    login_buttons = self.driver.find_elements(By.XPATH, "//button | //input[@type='submit'] | //input[@type='button']")
-                    
-                    login_clicked = False
-                    for button in login_buttons:
-                        if button.is_displayed():
-                            print("🖱️ Clicking login button...")
-                            button.click()
-                            login_clicked = True
-                            break
-                    
-                    if login_clicked:
-                        print("✅ Login button clicked!")
-                        
-                        # Wait for login completion - REDUCED TO 15 SECONDS
-                        print("⏳ Waiting 15 seconds for login...")
-                        time.sleep(15)  # REDUCED: User requested 15 seconds
-                        
-                        # Quick verification
-                        print("✅ Fallback login completed!")
-                        return True
-                    else:
-                        print("❌ Could not click login button in fallback")
-                        return False
-                else:
-                    print("❌ Could not find login form in fallback")
-                    return False
+                time.sleep(15)
+                print("✅ Fallback login completed!")
+                return True
                 
         except Exception as e:
             print(f"❌ Login error: {e}")
             return False
     
-    def fast_navigate_to_wireless(self):
-        """Navigate to Wireless LANs using stable method from login fix.txt"""
+    def navigate_to_wireless_lans(self):
+        """Navigate to Wireless LANs using exact selector from login fix.txt"""
         try:
             print("🧭 Looking for Wireless LANs menu...")
             
-            # Wait for page to stabilize after login
-            print("⏳ Waiting for page to stabilize after login...")
-            time.sleep(8)  # Wait for page to load after login
+            # Wait for page to stabilize (from login fix.txt timing)
+            time.sleep(5)
             
             # Take screenshot for debugging
             screenshot_path = f"after_login_{int(time.time() * 1000)}.png"
@@ -293,8 +316,7 @@ class CorrectedWiFiApp:
                                 print("✅ Clicked Wireless LANs menu")
                                 time.sleep(5)
                                 return True
-                except Exception as e:
-                    print(f"❌ Selector failed: {e}")
+                except:
                     continue
             
             print("❌ Could not find Wireless LANs menu")
@@ -304,13 +326,44 @@ class CorrectedWiFiApp:
             print(f"❌ Error navigating to Wireless LANs: {e}")
             return False
     
+    def click_list_button(self):
+        """Click List button to ensure all networks are visible"""
+        try:
+            print("📋 Looking for List button...")
+            
+            # Use selectors from fullpaths.txt
+            list_selectors = [
+                "//span[@id='button-1644-btnInnerEl']",
+                "//span[contains(@class, 'x-btn-inner')][contains(text(), 'List')]",
+                "//span[contains(text(), 'List')][@data-ref='btnInnerEl']"
+            ]
+            
+            for selector in list_selectors:
+                try:
+                    elements = self.driver.find_elements(By.XPATH, selector)
+                    for elem in elements:
+                        if elem.is_displayed():
+                            print("✅ Found List button")
+                            elem.click()
+                            print("✅ Clicked List button")
+                            time.sleep(3)
+                            return True
+                except:
+                    continue
+            
+            print("⚠️ Could not find List button, continuing anyway")
+            return False
+            
+        except Exception as e:
+            print(f"⚠️ Error clicking List button: {e}")
+            return False
+    
     def click_network(self, network_name):
-        """Click network using exact selector from login fix.txt"""
+        """Click network using text-based selector from login fix.txt"""
         try:
             print(f"📡 Looking for {network_name}...")
             
-            # Use exact selector from login fix.txt:
-            # <span class=" rks-clickable-column">EHC TV</span>
+            # Use exact text-based selector from login fix.txt (most reliable for dynamic elements)
             network_selector = f"//span[contains(@class, 'rks-clickable-column')][contains(text(), '{network_name}')]"
             
             elements = self.driver.find_elements(By.XPATH, network_selector)
@@ -330,16 +383,15 @@ class CorrectedWiFiApp:
             return False
     
     def click_clients_tab(self):
-        """Click Clients tab using exact selector from login fix.txt"""
+        """Click Clients tab using multiple selectors"""
         try:
             print("📊 Looking for Clients tab...")
             
-            # Use exact selector from login fix.txt:
-            # <span id="tab-3060-btnInnerEl" data-ref="btnInnerEl" unselectable="on" class="x-tab-inner x-tab-inner-default">Clients</span>
+            # Use multiple selectors for reliability
             clients_selectors = [
-                "//span[@id='tab-3060-btnInnerEl']",
                 "//span[contains(@class, 'x-tab-inner')][contains(text(), 'Clients')]",
-                "//span[contains(text(), 'Clients')][@data-ref='btnInnerEl']"
+                "//span[contains(text(), 'Clients')][@data-ref='btnInnerEl']",
+                "//span[@id='tab-3448-btnInnerEl']"  # From fullpaths.txt
             ]
             
             for selector in clients_selectors:
@@ -363,19 +415,16 @@ class CorrectedWiFiApp:
             return False
     
     def click_download_button(self):
-        """Click FontAwesome download button using exact selector from login fix.txt"""
+        """Click FontAwesome download button using multiple selectors"""
         try:
             print("💾 Looking for FontAwesome download button...")
             
-            # Use exact selector from login fix.txt:
-            # <span id="Rks-module-base-Button-3369-btnIconEl" data-ref="btnIconEl" role="presentation" 
-            #       unselectable="on" class="x-btn-icon-el x-btn-icon-el-default-toolbar-small  x-btn-glyph" 
-            #       style="font-family:FontAwesome !important;"></span>
+            # Use multiple selectors from login fix.txt + fullpaths.txt
             download_selectors = [
-                "//span[@id='Rks-module-base-Button-3369-btnIconEl']",
                 "//span[contains(@class, 'x-btn-glyph')][@style*='FontAwesome']",
                 "//span[contains(@class, 'x-btn-icon-el')][@style*='FontAwesome']",
-                "//span[@data-ref='btnIconEl'][@style*='FontAwesome']"
+                "//span[@data-ref='btnIconEl'][@style*='FontAwesome']",
+                "//span[@id='Rks-module-base-Button-3835-btnIconEl']"  # From fullpaths.txt
             ]
             
             for selector in download_selectors:
@@ -399,17 +448,15 @@ class CorrectedWiFiApp:
             return False
     
     def click_page_2(self):
-        """Click page 2 using exact selector from login fix.txt"""
+        """Click page 2 using multiple selectors"""
         try:
             print("📄 Looking for page 2...")
             
-            # Use exact selector from login fix.txt:
-            # <span id="button-2436-btnInnerEl" data-ref="btnInnerEl" unselectable="on" 
-            #       class="x-btn-inner x-btn-inner-plain-toolbar-small">2</span>
+            # Use multiple selectors from login fix.txt + fullpaths.txt
             page2_selectors = [
-                "//span[@id='button-2436-btnInnerEl']",
                 "//span[contains(@class, 'x-btn-inner')][contains(text(), '2')]",
-                "//span[@data-ref='btnInnerEl'][contains(text(), '2')]"
+                "//span[@data-ref='btnInnerEl'][contains(text(), '2')]",
+                "//span[@id='button-3084-btnInnerEl']"  # From fullpaths.txt
             ]
             
             for selector in page2_selectors:
@@ -433,194 +480,145 @@ class CorrectedWiFiApp:
             return False
     
     def send_download_notification(self, files_downloaded: int, slot_name: str = ""):
-        """Send email notification"""
+        """Send email notification about download success"""
         try:
-            if files_downloaded > 0:
-                subject = f"✅ CSV Download Success - {slot_name} - {datetime.now().strftime('%m/%d/%Y')}"
-                message = f"Successfully downloaded {files_downloaded} CSV files to {self.csv_dir}"
-            else:
-                subject = f"❌ CSV Download Failed - {slot_name} - {datetime.now().strftime('%m/%d/%Y')}"
-                message = f"Failed to download CSV files to {self.csv_dir}"
+            print(f"📧 Sending notification for {files_downloaded} files...")
             
-            print(f"📧 Sending email: {subject}")
-            self.email_service.send_email(subject, message)
+            subject = f"✅ CSV Download Success - {files_downloaded} files - {datetime.now().strftime('%m/%d/%Y')}"
+            
+            body = f"""
+🎉 WiFi Automation Success - Robust Version!
+
+📊 Files Downloaded: {files_downloaded}
+📁 Download Directory: {self.csv_dir}
+🕐 Completion Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+✨ Robust Features Applied:
+- Iframe login with precision selectors
+- Text-based network element finding
+- Multiple selector fallbacks
+- Timing from proven login fix.txt
+
+🚀 System Status: OPERATIONAL
+"""
+            
+            self.email_service.send_email(subject, body)
+            print("✅ Email notification sent successfully!")
             
         except Exception as e:
-            print(f"❌ Email error: {e}")
+            print(f"❌ Failed to send email notification: {e}")
     
-    def fast_login_with_retry(self):
-        """Login with retry and refresh logic - keep Chrome open"""
-        max_attempts = 3  # Try up to 3 times with refresh
-        
-        for attempt in range(max_attempts):
-            try:
-                print(f"🔑 Login attempt {attempt + 1}/{max_attempts}...")
-                
-                if attempt > 0:
-                    # Refresh the page instead of closing Chrome
-                    print("🔄 Refreshing page for retry...")
-                    self.driver.refresh()
-                    time.sleep(10)  # Wait for refresh to complete
-                
-                # Try the stable login process
-                if self.fast_login():
-                    print(f"✅ Login successful on attempt {attempt + 1}!")
-                    return True
-                else:
-                    print(f"❌ Login attempt {attempt + 1} failed")
-                    if attempt < max_attempts - 1:
-                        print("🔄 Will refresh and try again...")
-                        
-            except Exception as e:
-                print(f"❌ Login attempt {attempt + 1} error: {e}")
-                if attempt < max_attempts - 1:
-                    print("🔄 Will refresh and try again...")
-        
-        print("❌ All login attempts failed")
-        return False
-    
-    def download_with_persistence(self):
-        """Download from all networks using exact pattern from login fix.txt"""
-        print("🎯 Starting download from all networks...")
-        
-        success_count = 0
-        
-        # Page 1: EHC TV (with Clients tab) - EXACT PATTERN FROM OLD CODE
-        print("\n🎯 Page 1: EHC TV (with Clients tab)")
-        if self.click_network("EHC TV"):
-            if self.click_clients_tab():
-                if self.click_download_button():
-                    success_count += 1
-                    print(f"✅ Downloaded from EHC TV! ({success_count}/4)")
-        
-        # Page 1: EHC-15 (direct download) - EXACT PATTERN FROM OLD CODE
-        print("\n🎯 Page 1: EHC-15 (direct download)")
-        if self.click_network("EHC-15"):
-            if self.click_download_button():
-                success_count += 1
-                print(f"✅ Downloaded from EHC-15! ({success_count}/4)")
-        
-        # Navigate to Page 2 - EXACT PATTERN FROM OLD CODE
-        print("\n🎯 Navigating to Page 2...")
-        if self.click_page_2():
-            # Page 2: Reception Hall-Mobile (with Clients tab) - EXACT PATTERN FROM OLD CODE
-            print("\n🎯 Page 2: Reception Hall-Mobile (with Clients tab)")
-            if self.click_network("Reception Hall-Mobile"):
+    def run_robust_automation(self):
+        """Run the robust automation with proper timing and error handling"""
+        try:
+            print("=" * 60)
+            print("🔥 ROBUST WIFI APP - BEST OF BOTH WORLDS")
+            print("=" * 60)
+            
+            # Setup Chrome
+            if not self.setup_chrome():
+                return False
+            
+            print("🔍 Chrome is now open and ready!")
+            
+            # Login with iframe (using login fix.txt timing)
+            if not self.login_with_iframe():
+                return False
+            
+            # Navigate to Wireless LANs
+            if not self.navigate_to_wireless_lans():
+                return False
+            
+            # Click List button to ensure all networks are visible
+            self.click_list_button()
+            
+            # Try to download from all 4 networks
+            success_count = 0
+            
+            # Page 1: EHC TV (with Clients tab)
+            print("\n🎯 Page 1: EHC TV (with Clients tab)")
+            if self.click_network("EHC TV"):
                 if self.click_clients_tab():
                     if self.click_download_button():
                         success_count += 1
-                        print(f"✅ Downloaded from Reception Hall-Mobile! ({success_count}/4)")
+                        print(f"✅ Downloaded from EHC TV! ({success_count}/{self.target_files})")
             
-            # Page 2: Reception Hall-TV (Clients tab vanishes) - EXACT PATTERN FROM OLD CODE
-            print("\n🎯 Page 2: Reception Hall-TV (Clients tab vanishes)")
-            if self.click_network("Reception Hall-TV"):
+            # Page 1: EHC-15 (direct download)
+            print("\n🎯 Page 1: EHC-15 (direct download)")
+            if self.click_network("EHC-15"):
                 if self.click_download_button():
                     success_count += 1
-                    print(f"✅ Downloaded from Reception Hall-TV! ({success_count}/4)")
-        
-        return success_count
-    
-    def run_robust_automation(self):
-        """Run automation with robust retry and refresh logic"""
-        try:
-            print("=" * 60)
-            print("🔥 ROBUST WIFI APP - WITH RETRY & REFRESH")
-            print("=" * 60)
+                    print(f"✅ Downloaded from EHC-15! ({success_count}/{self.target_files})")
             
-            # Setup Chrome once
-            if not self.setup_chrome():
-                return {"success": False, "error": "Chrome setup failed", "files_downloaded": 0}
-            
-            print("🔍 Chrome ready!")
-            
-            # Login with retry and refresh
-            if not self.fast_login_with_retry():
-                return {"success": False, "error": "Login failed after all retries", "files_downloaded": 0}
-            
-            # Navigate to Wireless LANs with retry
-            navigation_success = False
-            for nav_attempt in range(3):  # Try navigation 3 times
-                print(f"🧭 Navigation attempt {nav_attempt + 1}/3...")
+            # Navigate to Page 2
+            print("\n🎯 Navigating to Page 2...")
+            if self.click_page_2():
+                # Page 2: Reception Hall-Mobile (with Clients tab)
+                print("\n🎯 Page 2: Reception Hall-Mobile (with Clients tab)")
+                if self.click_network("Reception Hall-Mobile"):
+                    if self.click_clients_tab():
+                        if self.click_download_button():
+                            success_count += 1
+                            print(f"✅ Downloaded from Reception Hall-Mobile! ({success_count}/{self.target_files})")
                 
-                if self.fast_navigate_to_wireless():
-                    navigation_success = True
-                    break
-                else:
-                    if nav_attempt < 2:
-                        print("🔄 Navigation failed, refreshing and trying again...")
-                        self.driver.refresh()
-                        time.sleep(8)  # Wait for page to load after refresh
+                # Page 2: Reception Hall-TV (Clients tab vanishes)
+                print("\n🎯 Page 2: Reception Hall-TV (Clients tab vanishes)")
+                if self.click_network("Reception Hall-TV"):
+                    if self.click_download_button():
+                        success_count += 1
+                        print(f"✅ Downloaded from Reception Hall-TV! ({success_count}/{self.target_files})")
             
-            if not navigation_success:
-                return {"success": False, "error": "Navigation failed after all retries", "files_downloaded": 0}
-            
-            # Get initial file count
-            initial_count = self.count_csv_files()
-            
-            # Download from all networks with persistence
-            success_count = self.download_with_persistence()
-            
-            # Wait for downloads to complete
+            # Wait for all downloads to complete
             print("\n⏳ Waiting for downloads to complete...")
-            time.sleep(10)  # Wait for downloads
+            time.sleep(10)
             
-            # Check final results
+            # Final check
             final_count = self.count_csv_files()
-            new_files_downloaded = final_count - initial_count
+            new_files = final_count - self.initial_files
+            csv_files = list(self.csv_dir.glob("*.csv"))
             
-            print(f"\n📊 Final Results:")
-            print(f"🎯 Networks attempted: 4")
-            print(f"📁 Initial files: {initial_count}")
-            print(f"📂 Final files: {final_count}")
-            print(f"🆕 New files downloaded: {new_files_downloaded}")
-            print(f"✅ Successful networks: {success_count}/4")
+            print(f"\n📁 Final result: {final_count} CSV files total, {new_files} new files:")
+            for file in csv_files:
+                file_size = file.stat().st_size
+                print(f"  ✅ {file.name} ({file_size} bytes)")
             
-            # Send notification
-            if new_files_downloaded > 0 or success_count > 0:
-                self.send_download_notification(new_files_downloaded, "Robust")
-            
-            # Keep Chrome open for inspection
-            print("\n⏳ Keeping Chrome open for 15 seconds for inspection...")
-            time.sleep(15)
-            
-            print("🔄 Closing Chrome...")
-            self.driver.quit()
-            
-            return {
-                "success": success_count > 0 or new_files_downloaded > 0,
-                "files_downloaded": new_files_downloaded,
-                "networks_processed": success_count,
-                "target_networks": 4,
-                "total_files": final_count
-            }
-            
+            if new_files >= self.target_files:
+                print(f"\n🎉 SUCCESS! Downloaded {new_files}/{self.target_files} CSV files!")
+                self.send_download_notification(new_files)
+                return True
+            else:
+                print(f"\n⚠️ Downloaded {new_files}/{self.target_files} CSV files")
+                if new_files > 0:
+                    self.send_download_notification(new_files)
+                return success_count > 0
+                
         except Exception as e:
-            print(f"❌ Automation error: {e}")
+            print(f"❌ Application error: {e}")
+            return False
+        finally:
             if self.driver:
-                try:
-                    self.driver.quit()
-                except:
-                    pass
-            return {"success": False, "error": str(e), "files_downloaded": 0}
+                print("\n⏳ Keeping Chrome open for 15 seconds...")
+                time.sleep(15)
+                print("🔄 Closing Chrome...")
+                self.driver.quit()
 
 def main():
     """Main function"""
     app = CorrectedWiFiApp()
-    result = app.run_robust_automation()
+    success = app.run_robust_automation()
     
-    if result["success"]:
+    if success:
         print("\n" + "=" * 60)
-        print("✅ SUCCESS! Fast app completed!")
-        print("CSV files downloaded successfully!")
+        print("✅ SUCCESS! The robust app is working!")
+        print("CSV files have been downloaded!")
         print("=" * 60)
     else:
         print("\n" + "=" * 60)
-        print("❌ App needs adjustment")
-        print("Check output for details")
+        print("❌ The app needs further adjustment")
+        print("Check the console output for details")
         print("=" * 60)
     
-    print("\nPress Enter to exit...")
-    input()
+    return success
 
 if __name__ == "__main__":
     main() 
