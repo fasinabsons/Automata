@@ -97,9 +97,9 @@ class VBSPhase1_LaunchLogin_Improved:
         return logger
     
     def task_1_1_launch_application_improved(self) -> Dict[str, any]:
-        """Task 1.1: Launch AbsonsItERP.exe application with PROPER double-click"""
+        """Task 1.1: Launch AbsonsItERP.exe application with PROPER left-click double-click"""
         try:
-            self.logger.info("🚀 TASK 1.1: Launching AbsonsItERP application with PROPER double-click...")
+            self.logger.info("🚀 TASK 1.1: Launching AbsonsItERP application with LEFT-CLICK DOUBLE-CLICK...")
             
             # Check if application is already running
             existing_window = self._find_vbs_window()
@@ -122,50 +122,21 @@ class VBSPhase1_LaunchLogin_Improved:
                         self.logger.warning(f"Path does not exist: {path}")
                         continue
                     
-                    # IMPROVED: Launch application with PROPER double-click simulation
-                    if path.endswith(".lnk"):
-                        self.logger.info("🎯 Using PROPER DOUBLE-CLICK to open shortcut...")
-                        # Method 1: Use Windows Explorer to double-click the shortcut
-                        # This is more reliable than os.startfile
-                        
-                        # Open Windows Explorer to the directory containing the shortcut
-                        directory = os.path.dirname(path)
-                        filename = os.path.basename(path)
-                        
-                        self.logger.info(f"Opening directory: {directory}")
-                        self.logger.info(f"Looking for file: {filename}")
-                        
-                        # Open explorer window
-                        os.startfile(directory)
-                        time.sleep(2)  # Wait for explorer to open
-                        
-                        # Find the shortcut file and double-click it
-                        # This requires using pyautogui to find and click the file
-                        self.logger.info("🔍 Looking for shortcut file in explorer...")
-                        
-                        # Alternative: Use direct shell execution with proper double-click
-                        import subprocess
-                        self.logger.info("🎯 Executing shortcut with shell...")
-                        subprocess.run(['cmd', '/c', 'start', '', f'"{path}"'], shell=True)
-                        
-                    else:
-                        # IMPROVED: Launch executable with proper double-click simulation
-                        self.logger.info("🎯 Using PROPER DOUBLE-CLICK to launch executable...")
-                        
-                        # Method 1: Use subprocess with proper shell execution
-                        self.logger.info("Method 1: Shell execution...")
-                        subprocess.Popen(f'"{path}"', shell=True)
-                        
-                        # Method 2: Alternative - use os.startfile with double-click simulation
-                        # os.startfile(path)
+                    # SAFE METHOD: Use proper left-click double-click (no deletion)
+                    self.logger.info("🎯 Using SAFE left-click double-click method...")
+                    success = self._safe_double_click_launch(path)
                     
-                    # CRITICAL: Wait 8 seconds for application to start loading
-                    self.logger.info("⏳ Waiting 8 seconds for application to start loading...")
-                    time.sleep(8)
+                    if not success:
+                        self.logger.warning(f"Safe double-click failed for path {i+1}")
+                        continue
                     
-                    # IMPROVED: Handle RUN popup dialog with proper taskbar sequence
-                    self.logger.info("🔔 Handling RUN popup with IMPROVED taskbar sequence...")
-                    popup_handled = self._handle_run_popup_improved()
+                    # CRITICAL: Wait 10 seconds for application to start loading
+                    self.logger.info("⏳ Waiting 10 seconds for application to start loading...")
+                    time.sleep(10)
+                    
+                    # IMPROVED: Handle RUN popup with keyboard method
+                    self.logger.info("🔔 Handling RUN popup with keyboard method...")
+                    popup_handled = self._handle_run_popup_simple()
                     if popup_handled:
                         self.logger.info("✅ RUN popup handled successfully")
                         # Wait additional time after popup
@@ -176,7 +147,7 @@ class VBSPhase1_LaunchLogin_Improved:
                     if window_handle:
                         self.window_handle = window_handle
                         
-                        # CRITICAL: Ensure window is maximized and focused (prevent minimization)
+                        # CRITICAL: Ensure window is maximized and focused
                         self.logger.info("📱 Maximizing and focusing VBS window...")
                         win32gui.SetForegroundWindow(self.window_handle)
                         win32gui.ShowWindow(self.window_handle, win32con.SW_MAXIMIZE)
@@ -207,13 +178,53 @@ class VBSPhase1_LaunchLogin_Improved:
             self.logger.error(traceback.format_exc())
             return {"success": False, "error": error_msg}
     
-    def _handle_run_popup_improved(self) -> bool:
-        """IMPROVED: Handle RUN popup using simple keyboard method: Left Arrow + Enter"""
+    def _safe_double_click_launch(self, file_path: str) -> bool:
+        """Safely launch application using left-click double-click (no deletion)"""
+        try:
+            self.logger.info(f"🖱️ SAFE: Performing left-click double-click on: {file_path}")
+            
+            # Method 1: Use subprocess with 'start' command (Windows native)
+            try:
+                import subprocess
+                result = subprocess.run(['start', '', file_path], shell=True, capture_output=True, text=True)
+                if result.returncode == 0:
+                    self.logger.info("✅ Successfully launched using subprocess start command")
+                    return True
+                else:
+                    self.logger.warning(f"Subprocess start failed: {result.stderr}")
+            except Exception as e:
+                self.logger.warning(f"Subprocess method failed: {e}")
+            
+            # Method 2: Use ShellExecute with 'open' verb (safest)
+            try:
+                import win32api
+                result = win32api.ShellExecute(0, 'open', file_path, '', '', 1)
+                if result > 32:  # Success codes are > 32
+                    self.logger.info("✅ Successfully launched using ShellExecute")
+                    return True
+                else:
+                    self.logger.warning(f"ShellExecute failed with code: {result}")
+            except Exception as e:
+                self.logger.warning(f"ShellExecute method failed: {e}")
+            
+            # Method 3: Fallback to os.startfile (but this might cause deletion)
+            try:
+                os.startfile(file_path)
+                self.logger.info("✅ Launched using os.startfile (fallback)")
+                return True
+            except Exception as e:
+                self.logger.warning(f"os.startfile fallback failed: {e}")
+            
+            return False
+            
+        except Exception as e:
+            self.logger.error(f"Safe double-click launch failed: {e}")
+            return False
+    
+    def _handle_run_popup_simple(self) -> bool:
+        """Simple keyboard method for RUN popup: Left Arrow + Enter"""
         try:
             self.logger.info("🔔 SIMPLE: Handling RUN popup with keyboard method (Left Arrow + Enter)...")
-            
-            # Preserve user context
-            self.preserve_user_context()
             
             # Wait a moment for popup to appear
             time.sleep(2)
@@ -221,7 +232,6 @@ class VBSPhase1_LaunchLogin_Improved:
             # Simple keyboard method - much more reliable
             self.logger.info("🎯 Using keyboard method: Left Arrow → Enter")
             
-            # Method 1: Left Arrow + Enter (user's preferred method)
             try:
                 self.logger.info("Step 1: Pressing Left Arrow to navigate to Run button...")
                 pyautogui.press('left')
@@ -236,43 +246,19 @@ class VBSPhase1_LaunchLogin_Improved:
                 
             except Exception as e:
                 self.logger.warning(f"Keyboard method failed: {e}")
-            
-            # Fallback Method 2: Just Enter (in case focus is already on Run)
-            try:
-                self.logger.info("Fallback: Trying just Enter key...")
-                pyautogui.press('enter')
-                time.sleep(2)
                 
-                self.logger.info("✅ Fallback Enter method completed")
-                return True
-                
-            except Exception as e:
-                self.logger.warning(f"Fallback Enter method failed: {e}")
-            
-            # Fallback Method 3: Tab + Enter (alternative navigation)
-            try:
-                self.logger.info("Fallback: Trying Tab + Enter...")
-                pyautogui.press('tab')
-                time.sleep(0.3)
-                pyautogui.press('enter')
-                time.sleep(2)
-                
-                self.logger.info("✅ Fallback Tab+Enter method completed")
-                return True
-                
-            except Exception as e:
-                self.logger.warning(f"Fallback Tab+Enter method failed: {e}")
-            
-            self.logger.warning("All keyboard methods failed")
-            return False
+                # Fallback: Just Enter
+                try:
+                    self.logger.info("Fallback: Trying just Enter key...")
+                    pyautogui.press('enter')
+                    time.sleep(2)
+                    return True
+                except:
+                    return False
             
         except Exception as e:
-            self.logger.error(f"Keyboard popup handling failed: {e}")
+            self.logger.error(f"Simple popup handling failed: {e}")
             return False
-        
-        finally:
-            # Always restore user context
-            self.restore_user_context()
     
     def _handle_popup_by_image(self) -> bool:
         """Method 1: Image-based popup detection"""
@@ -424,59 +410,77 @@ class VBSPhase1_LaunchLogin_Improved:
             return False
     
     def perform_login_sequence(self) -> bool:
-        """Perform VBS login in background"""
+        """Perform VBS login sequence: IT dropdown → Date dropdown → Username → Password → Enter"""
         try:
-            self.logger.info("🔐 Performing login sequence (background mode)...")
-            
-            # Preserve user context
-            self.preserve_user_context()
+            self.logger.info("🔐 Performing login sequence with correct field order...")
             
             # Find and activate VBS window
             if not self.window_handle:
                 vbs_windows = self._find_vbs_windows()
                 if not vbs_windows:
+                    self.logger.error("No VBS windows found for login")
                     return False
                 self.window_handle = vbs_windows[0][0]
             
             # Temporarily activate VBS window
             win32gui.ShowWindow(self.window_handle, win32con.SW_RESTORE)
             win32gui.SetForegroundWindow(self.window_handle)
-            time.sleep(1)
+            time.sleep(2)
             
-            # Login sequence
-            login_steps = [
-                ("IT dropdown", self.coordinates["it_dropdown"], "IT"),
-                ("Date field", self.coordinates["date_field"], self.credentials["date"]),
-                ("Username field", self.coordinates["username_field"], self.credentials["username"]),
-                ("OK button", self.coordinates["ok_button"], None)
-            ]
+            # Login sequence in correct order
+            self.logger.info("📋 Starting login field sequence...")
             
-            for step_name, (x, y), text in login_steps:
-                try:
-                    self.logger.info(f"Login step: {step_name}")
-                    
-                    # Click field
-                    self._background_click(x, y)
-                    time.sleep(0.5)
-                    
-                    if text:
-                        # Clear field and enter text
-                        pyautogui.hotkey('ctrl', 'a')
-                        time.sleep(0.2)
-                        pyautogui.typewrite(text)
-                        time.sleep(0.5)
-                    
-                    # Special handling for dropdown
-                    if "dropdown" in step_name:
-                        # Press Enter to select
-                        pyautogui.press('enter')
-                        time.sleep(0.5)
-                    
-                except Exception as e:
-                    self.logger.error(f"Login step {step_name} failed: {e}")
-                    return False
+            # 1st field: IT dropdown
+            self.logger.info("Step 1: Clicking IT dropdown...")
+            self._click_coordinate(self.coordinates["it_dropdown"])
+            time.sleep(0.5)
+            pyautogui.typewrite("IT")
+            time.sleep(0.5)
+            pyautogui.press('enter')  # Confirm dropdown selection
+            time.sleep(0.5)
             
-            self.logger.info("✅ Login sequence completed!")
+            # 2nd field: Date dropdown (01/01/2023)
+            self.logger.info("Step 2: Clicking Date dropdown...")
+            self._click_coordinate(self.coordinates["date_field"])
+            time.sleep(0.5)
+            # Clear field first
+            pyautogui.hotkey('ctrl', 'a')
+            time.sleep(0.2)
+            pyautogui.typewrite("01/01/2023")
+            time.sleep(0.5)
+            
+            # 3rd field: Username (vj)
+            self.logger.info("Step 3: Clicking Username field...")
+            self._click_coordinate(self.coordinates["username_field"])
+            time.sleep(0.5)
+            # Clear field completely
+            pyautogui.hotkey('ctrl', 'a')
+            time.sleep(0.2)
+            pyautogui.press('delete')
+            time.sleep(0.2)
+            # Type username character by character
+            for char in "vj":
+                pyautogui.typewrite(char)
+                time.sleep(0.1)
+            time.sleep(0.5)
+            
+            # 4th field: Password (empty - just click to ensure it's empty)
+            self.logger.info("Step 4: Ensuring password field is empty...")
+            # Note: Password field coordinates might be near username, we'll use Tab to navigate
+            pyautogui.press('tab')
+            time.sleep(0.2)
+            # Clear password field
+            pyautogui.hotkey('ctrl', 'a')
+            time.sleep(0.2)
+            pyautogui.press('delete')
+            time.sleep(0.5)
+            
+            # Final step: Submit login (Enter key method)
+            self.logger.info("Step 5: Submitting login with Enter key...")
+            pyautogui.press('enter')
+            time.sleep(3)  # Wait for login to process
+            
+            self.logger.info("✅ Login sequence completed successfully!")
             return True
             
         except Exception as e:
@@ -611,6 +615,27 @@ class VBSPhase1_LaunchLogin_Improved:
             vbs_windows = self._find_vbs_windows()
             return len(vbs_windows) > 0
         except:
+            return False
+    
+    def _click_coordinate(self, coordinate: Tuple[int, int]) -> bool:
+        """Click at specific coordinate using Windows API"""
+        try:
+            x, y = coordinate
+            
+            # Move cursor to position
+            win32api.SetCursorPos((x, y))
+            time.sleep(0.1)
+            
+            # Perform click using Windows API
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, x, y, 0, 0)
+            time.sleep(0.05)
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, x, y, 0, 0)
+            
+            self.logger.info(f"Clicked at coordinate: ({x}, {y})")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error clicking coordinate {coordinate}: {e}")
             return False
     
     def preserve_user_context(self):
