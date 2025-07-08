@@ -263,6 +263,100 @@ class EnhancedWiFiServiceWithDynamicFiles:
             self.logger.error(f"❌ Error ensuring minimum files: {e}")
             return False
     
+    def run_fast_wifi_download(self, slot_name: str = "scheduled"):
+        """Run FAST WiFi download for scheduled tasks"""
+        try:
+            self.logger.info(f"🚀 Starting FAST WiFi download for slot: {slot_name}")
+            
+            # Check if we're in business hours
+            if not self.is_business_hours():
+                self.logger.info("🌙 Outside business hours, skipping scheduled download")
+                return
+            
+            # Get current file count before download
+            status_before = self.file_manager.get_current_date_folder_status()
+            files_before = status_before['csv_count']
+            
+            # Run the ROBUST download with retry and refresh
+            result = self.wifi_app.run_robust_automation()
+            
+            if result and result.get("success"):
+                # Get file count after download
+                status_after = self.file_manager.get_current_date_folder_status()
+                files_after = status_after['csv_count']
+                new_files = files_after - files_before
+                
+                self.daily_files_downloaded += new_files
+                self.last_successful_run = datetime.now()
+                
+                self.logger.info(f"✅ FAST download successful for {slot_name}! Added {new_files} files (total: {files_after})")
+                
+                # Send download notification
+                self.email_service.send_csv_download_notification(
+                    slot_name=slot_name,
+                    files_downloaded=new_files,
+                    total_files=files_after,
+                    success=True
+                )
+                
+                # Check if we should generate Excel (8 files reached)
+                if files_after >= self.minimum_files_required and not self.excel_generated_today:
+                    self.logger.info(f"📊 {files_after} files reached, triggering Excel generation...")
+                    self.generate_excel_file()
+                
+            else:
+                error_msg = result.get("error", "Unknown error") if result else "No result returned"
+                self.logger.error(f"❌ FAST download failed for {slot_name}: {error_msg}")
+                
+                # Send failure notification
+                status_after = self.file_manager.get_current_date_folder_status()
+                self.email_service.send_csv_download_notification(
+                    slot_name=slot_name,
+                    files_downloaded=0,
+                    total_files=status_after['csv_count'],
+                    success=False
+                )
+                
+        except Exception as e:
+            self.logger.error(f"❌ Error in FAST WiFi download for {slot_name}: {e}")
+            self.handle_crash(e, f"FAST WiFi download ({slot_name})")
+    
+    def check_and_create_startup_folder(self):
+        """Check if we need to create a new folder at startup (if starting at midnight or folder doesn't exist)"""
+        try:
+            self.logger.info("🌅 Checking if startup folder creation is needed...")
+            
+            current_time = datetime.now()
+            
+            # Check if we're starting at midnight (00:00 - 00:05)
+            is_midnight_startup = (current_time.hour == 0 and current_time.minute <= 5)
+            
+            # Check if today's folder exists
+            today_folder = self.file_manager.get_download_directory()
+            folder_exists = os.path.exists(today_folder)
+            
+            if is_midnight_startup or not folder_exists:
+                self.logger.info(f"🌅 Creating startup folder: midnight={is_midnight_startup}, exists={folder_exists}")
+                
+                # Create the folder
+                self.create_daily_folder()
+                
+                # If it's midnight, also reset counters
+                if is_midnight_startup:
+                    self.logger.info("🔄 Midnight startup detected, resetting daily counters...")
+                    self.daily_files_downloaded = 0
+                    self.excel_generated_today = False
+                    self.vbs_automation_completed_today = False
+                
+                self.logger.info("✅ Startup folder creation completed")
+                
+            else:
+                self.logger.info("ℹ️ No startup folder creation needed")
+                
+        except Exception as e:
+            self.logger.error(f"❌ Startup folder creation failed: {e}")
+            # Don't crash the service for this
+    
     def handle_crash(self, error: Exception, context: str):
         """Handle crashes with logging and recovery"""
         self.crash_count += 1
@@ -624,6 +718,9 @@ class EnhancedWiFiServiceWithDynamicFiles:
             # Add to startup
             self.add_to_startup()
             
+            # Check and create startup folder
+            self.check_and_create_startup_folder()
+
             # Schedule regular FAST tasks
             self.schedule_tasks()
             

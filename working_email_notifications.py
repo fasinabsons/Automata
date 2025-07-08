@@ -221,6 +221,49 @@ File Ready for VBS Processing: ✅
             self.logger.error(f"Error sending Excel generation notification: {e}")
             return False
     
+    def send_daily_folder_notification(self, folder_path: str) -> bool:
+        """Send daily folder creation notification"""
+        try:
+            folder_name = Path(folder_path).name
+            subject = f"📁 Daily Folder Created - {folder_name}"
+            body = f"""Daily folder has been created successfully!
+
+Folder Creation Details:
+📅 Date: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+📁 Folder: {folder_name}
+📂 Full Path: {folder_path}
+🌅 Trigger: Midnight daily folder creation
+
+Folder Structure:
+📂 EHC_Data/{folder_name}/ - CSV files storage
+📂 EHC_Data_Merge/{folder_name}/ - Excel files storage  
+📂 EHC_Data_Pdf/{folder_name}/ - PDF files storage
+
+Daily Schedule:
+🌅 Morning: 09:30 AM (CSV download)
+🌞 Afternoon: 13:00 PM (CSV download + backup at 13:30 PM)
+📊 Excel: Generated automatically after 8 files
+📄 PDF: Generated from Excel data
+📧 Reports: Sent daily to management
+
+The WiFi automation system has successfully created today's folder structure and is ready for data collection.
+
+Best regards,
+WiFi Automation System
+MoonFlower Hotel IT Department
+
+---
+This is an automated notification for daily folder creation.
+System Status: OPERATIONAL ✅
+Ready for Data Collection: ✅
+"""
+            
+            return self.send_email(subject, body)
+            
+        except Exception as e:
+            self.logger.error(f"Error sending daily folder notification: {e}")
+            return False
+    
     def send_service_startup_notification(self) -> bool:
         """Send service startup notification"""
         try:
