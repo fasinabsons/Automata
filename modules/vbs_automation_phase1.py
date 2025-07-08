@@ -208,37 +208,71 @@ class VBSPhase1_LaunchLogin_Improved:
             return {"success": False, "error": error_msg}
     
     def _handle_run_popup_improved(self) -> bool:
-        """IMPROVED: Handle RUN popup by clicking taskbar FIRST, then Run button"""
+        """IMPROVED: Handle RUN popup using simple keyboard method: Left Arrow + Enter"""
         try:
-            self.logger.info("🔔 IMPROVED: Handling RUN popup with proper taskbar sequence...")
+            self.logger.info("🔔 SIMPLE: Handling RUN popup with keyboard method (Left Arrow + Enter)...")
             
             # Preserve user context
             self.preserve_user_context()
             
-            # Multiple detection methods
-            detection_methods = [
-                self._handle_popup_by_image,
-                self._handle_popup_by_window_activation,
-                self._handle_popup_by_coordinates,
-                self._handle_popup_by_taskbar_recovery
-            ]
+            # Wait a moment for popup to appear
+            time.sleep(2)
             
-            for i, method in enumerate(detection_methods, 1):
-                try:
-                    self.logger.info(f"Trying detection method {i}...")
-                    if method():
-                        self.logger.info(f"✅ Run popup handled by method {i}")
-                        return True
-                except Exception as e:
-                    self.logger.warning(f"Method {i} failed: {e}")
-                    continue
+            # Simple keyboard method - much more reliable
+            self.logger.info("🎯 Using keyboard method: Left Arrow → Enter")
             
-            self.logger.warning("All popup detection methods failed")
+            # Method 1: Left Arrow + Enter (user's preferred method)
+            try:
+                self.logger.info("Step 1: Pressing Left Arrow to navigate to Run button...")
+                pyautogui.press('left')
+                time.sleep(0.5)
+                
+                self.logger.info("Step 2: Pressing Enter to click Run button...")
+                pyautogui.press('enter')
+                time.sleep(2)
+                
+                self.logger.info("✅ Keyboard method completed (Left Arrow + Enter)")
+                return True
+                
+            except Exception as e:
+                self.logger.warning(f"Keyboard method failed: {e}")
+            
+            # Fallback Method 2: Just Enter (in case focus is already on Run)
+            try:
+                self.logger.info("Fallback: Trying just Enter key...")
+                pyautogui.press('enter')
+                time.sleep(2)
+                
+                self.logger.info("✅ Fallback Enter method completed")
+                return True
+                
+            except Exception as e:
+                self.logger.warning(f"Fallback Enter method failed: {e}")
+            
+            # Fallback Method 3: Tab + Enter (alternative navigation)
+            try:
+                self.logger.info("Fallback: Trying Tab + Enter...")
+                pyautogui.press('tab')
+                time.sleep(0.3)
+                pyautogui.press('enter')
+                time.sleep(2)
+                
+                self.logger.info("✅ Fallback Tab+Enter method completed")
+                return True
+                
+            except Exception as e:
+                self.logger.warning(f"Fallback Tab+Enter method failed: {e}")
+            
+            self.logger.warning("All keyboard methods failed")
             return False
             
         except Exception as e:
-            self.logger.error(f"IMPROVED popup handling failed: {e}")
+            self.logger.error(f"Keyboard popup handling failed: {e}")
             return False
+        
+        finally:
+            # Always restore user context
+            self.restore_user_context()
     
     def _handle_popup_by_image(self) -> bool:
         """Method 1: Image-based popup detection"""
@@ -476,6 +510,18 @@ class VBSPhase1_LaunchLogin_Improved:
             self.logger.warning(f"VBS window detection failed: {e}")
             return []
     
+    def _find_vbs_window(self):
+        """Find single VBS application window (returns first match)"""
+        try:
+            vbs_windows = self._find_vbs_windows()
+            if vbs_windows:
+                return vbs_windows[0][0]  # Return first window handle
+            return None
+            
+        except Exception as e:
+            self.logger.warning(f"VBS window detection failed: {e}")
+            return None
+    
     def _find_security_dialogs(self):
         """Find security/permission dialog windows"""
         try:
@@ -516,9 +562,8 @@ class VBSPhase1_LaunchLogin_Improved:
             # Perform click
             pyautogui.click(x, y, duration=0.1)
             
-            # Restore cursor if preserving user context
-            if self.preserve_user_context:
-                win32gui.SetCursorPos(current_pos)
+            # Restore cursor (always restore to be safe)
+            win32gui.SetCursorPos(current_pos)
             
         except Exception as e:
             self.logger.warning(f"Background click failed: {e}")
@@ -568,10 +613,18 @@ class VBSPhase1_LaunchLogin_Improved:
         except:
             return False
     
+    def preserve_user_context(self):
+        """Preserve user's current working context"""
+        try:
+            self.user_active_window = win32gui.GetForegroundWindow()
+            self.logger.info("User context preserved")
+        except Exception as e:
+            self.logger.warning(f"Could not preserve user context: {e}")
+    
     def restore_user_context(self):
         """Restore user's working context"""
         try:
-            if self.user_active_window and self.preserve_user_context:
+            if hasattr(self, 'user_active_window') and self.user_active_window:
                 win32gui.SetForegroundWindow(self.user_active_window)
                 self.logger.info("User context restored")
         except Exception as e:
