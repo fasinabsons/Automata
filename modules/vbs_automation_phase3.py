@@ -10,18 +10,26 @@ import time
 import logging
 import win32gui
 import win32con
-import pyautogui
-from typing import Dict, Optional
+import win32api
+import win32process
+import ctypes
+from ctypes import wintypes
+from typing import Dict, Optional, Any
 import traceback
 from datetime import datetime
 from pathlib import Path
 
-# Disable pyautogui failsafe
-pyautogui.FAILSAFE = False
-pyautogui.PAUSE = 0.5
+# Windows API constants for lock screen compatibility
+WM_LBUTTONDOWN = 0x0201
+WM_LBUTTONUP = 0x0202
+WM_KEYDOWN = 0x0100
+WM_KEYUP = 0x0101
+WM_CHAR = 0x0102
+VK_RETURN = 0x0D
+VK_CONTROL = 0x11
 
 class VBSPhase3_ExcelImport:
-    """Phase 3: Excel Import Implementation"""
+    """Phase 3: Excel Import Implementation with Lock Screen Compatibility"""
     
     def __init__(self, window_handle: Optional[int] = None):
         self.logger = self._setup_logging()
@@ -69,7 +77,7 @@ class VBSPhase3_ExcelImport:
             "progress_check": 10,        # Progress check interval
         }
         
-        # Import sequence configuration
+        # Import sequence configuration - ONLY IMPORT ACTIONS (NO NAVIGATION)
         self.import_sequence = [
             {
                 "step": "click_new",
@@ -97,7 +105,7 @@ class VBSPhase3_ExcelImport:
             }
         ]
         
-        self.logger.info("VBS Phase 3 (Excel Import) initialized")
+        self.logger.info("VBS Phase 3 (Excel Import) initialized with lock screen compatibility")
     
     def _setup_logging(self) -> logging.Logger:
         """Setup logging for Phase 3"""
@@ -117,7 +125,118 @@ class VBSPhase3_ExcelImport:
         self.window_handle = window_handle
         self.logger.info(f"Window handle set: {window_handle}")
     
-    def task_3_1_setup_import_form(self) -> Dict[str, any]:
+    def _click_coordinate_locked(self, x: int, y: int) -> bool:
+        """Click coordinate using Windows API - works even when screen is locked"""
+        try:
+            if not self.window_handle:
+                self.logger.error("No window handle available")
+                return False
+            
+            # Verify window handle is still valid
+            if not win32gui.IsWindow(self.window_handle):
+                self.logger.error(f"Window handle {self.window_handle} is invalid, trying to find VBS window...")
+                # Try to find VBS window again
+                vbs_window = self._find_vbs_window()
+                if vbs_window:
+                    self.window_handle = vbs_window
+                    self.logger.info(f"Found new VBS window: {self.window_handle}")
+                else:
+                    self.logger.error("Could not find valid VBS window")
+                    return False
+            
+            # Use absolute screen coordinates for VBS (like Phase 2)
+            lParam = (y << 16) | x
+            
+            # Send mouse down and up messages directly to window
+            win32gui.PostMessage(self.window_handle, WM_LBUTTONDOWN, 0, lParam)
+            time.sleep(0.1)
+            win32gui.PostMessage(self.window_handle, WM_LBUTTONUP, 0, lParam)
+            
+            self.logger.info(f"Clicked at ({x}, {y}) using Windows API")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Windows API click failed: {e}")
+            return False
+    
+    def _find_vbs_window(self) -> Optional[int]:
+        """Find VBS window handle"""
+        vbs_windows = []
+        
+        def enum_windows_callback(hwnd, windows):
+            try:
+                if win32gui.IsWindowVisible(hwnd):
+                    title = win32gui.GetWindowText(hwnd)
+                    if title:
+                        # Look for VBS/Absons indicators - EXCLUDE browser windows
+                        vbs_indicators = ['absons', 'arabian', 'moonflower']
+                        exclude_indicators = ['login', 'security', 'warning', 'brave', 'chrome', 'firefox', 'edge', 'browser', 'grok']
+                        
+                        title_lower = title.lower()
+                        has_vbs = any(indicator in title_lower for indicator in vbs_indicators)
+                        has_exclude = any(indicator in title_lower for indicator in exclude_indicators)
+                        
+                        if has_vbs and not has_exclude:
+                            # Additional check: get process name to ensure it's VBS
+                            try:
+                                _, process_id = win32process.GetWindowThreadProcessId(hwnd)
+                                import psutil
+                                process = psutil.Process(process_id)
+                                exe_name = process.name().lower()
+                                
+                                # Only accept if it's actually VBS executable
+                                if 'absons' in exe_name or 'erp' in exe_name or 'arabian' in exe_name:
+                                    windows.append((hwnd, title))
+                            except:
+                                pass
+                            
+            except:
+                pass
+            return True
+        
+        win32gui.EnumWindows(enum_windows_callback, vbs_windows)
+        
+        if vbs_windows:
+            self.logger.info(f"Found VBS window: '{vbs_windows[0][1]}'")
+            return vbs_windows[0][0]
+        
+        return None
+    
+    def _type_text_locked(self, text: str) -> bool:
+        """Type text using Windows API - works even when screen is locked"""
+        try:
+            if not self.window_handle:
+                return False
+            
+            for char in text:
+                win32gui.PostMessage(self.window_handle, WM_CHAR, ord(char), 0)
+                time.sleep(0.05)
+            
+            self.logger.info(f"Typed '{text}' using Windows API")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Windows API typing failed: {e}")
+            return False
+    
+    def _send_key_locked(self, vk_code: int) -> bool:
+        """Send key using Windows API - works even when screen is locked"""
+        try:
+            if not self.window_handle:
+                return False
+            
+            win32gui.PostMessage(self.window_handle, WM_KEYDOWN, vk_code, 0)
+            time.sleep(0.05)
+            win32gui.PostMessage(self.window_handle, WM_KEYUP, vk_code, 0)
+            
+            self.logger.info(f"Sent key {vk_code} using Windows API")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Windows API key sending failed: {e}")
+            return False
+    
+    def task_3_1_setup_import_form(self) -> Dict[str, Any]:
         """Task 3.1: Setup import form (New → Credit → Import EHC → 3 dots)"""
         try:
             self.logger.info("📋 TASK 3.1: Setting up import form...")
@@ -125,11 +244,11 @@ class VBSPhase3_ExcelImport:
             if not self.window_handle:
                 return {"success": False, "error": "No window handle available"}
             
-            # Ensure window is active
-            win32gui.SetForegroundWindow(self.window_handle)
-            time.sleep(self.timeouts["button_click"])
+            # Wait for user to switch to VBS software (as specified)
+            self.logger.info("⏳ Waiting 5 seconds for user to switch to VBS software...")
+            time.sleep(5)
             
-            # Execute import setup sequence
+            # Execute import setup sequence using Windows API
             for i, step in enumerate(self.import_sequence):
                 step_num = i + 1
                 step_name = step["step"]
@@ -146,10 +265,13 @@ class VBSPhase3_ExcelImport:
                 x, y = self.coordinates[coordinate_key]
                 wait_time = self.timeouts[wait_time_key]
                 
-                # Perform click action
+                # Perform click action using Windows API
                 try:
-                    self.logger.info(f"Clicking at coordinates ({x}, {y})")
-                    pyautogui.click(x, y)
+                    self.logger.info(f"Clicking at coordinates ({x}, {y}) using Windows API")
+                    success = self._click_coordinate_locked(x, y)
+                    if not success:
+                        return {"success": False, "error": f"Failed to click at ({x}, {y})"}
+                    
                     time.sleep(wait_time)
                     
                     # Verify step completion
@@ -174,7 +296,7 @@ class VBSPhase3_ExcelImport:
             self.logger.error(traceback.format_exc())
             return {"success": False, "error": error_msg}
     
-    def task_3_2_select_excel_file(self, date_folder: str) -> Dict[str, any]:
+    def task_3_2_select_excel_file(self, date_folder: str) -> Dict[str, Any]:
         """Task 3.2: Select Excel file from specified date folder"""
         try:
             self.logger.info(f"📁 TASK 3.2: Selecting Excel file from {date_folder}...")
@@ -190,13 +312,13 @@ class VBSPhase3_ExcelImport:
             full_file_path = os.path.join(folder_path, excel_file)
             self.logger.info(f"Target Excel file: {full_file_path}")
             
-            # Navigate to file in dialog
-            success = self._navigate_to_file(full_file_path)
+            # Navigate to file in dialog using Windows API
+            success = self._navigate_to_file_locked(full_file_path)
             if not success:
                 return {"success": False, "error": "Failed to navigate to Excel file"}
             
-            # Select the file
-            success = self._select_file_in_dialog(excel_file)
+            # Select the file using Windows API
+            success = self._select_file_in_dialog_locked(excel_file)
             if not success:
                 return {"success": False, "error": "Failed to select Excel file"}
             
@@ -208,24 +330,28 @@ class VBSPhase3_ExcelImport:
             self.logger.error(error_msg)
             return {"success": False, "error": error_msg}
     
-    def task_3_3_import_excel_data(self) -> Dict[str, any]:
-        """Task 3.3: Import Excel data (Select sheet → Import → Wait)"""
+    def task_3_3_import_excel_data(self) -> Dict[str, Any]:
+        """Task 3.3: Import Excel data (Wait for popup → Click OK → Click Import → Wait)"""
         try:
             self.logger.info("📊 TASK 3.3: Importing Excel data...")
             
-            # Step 1: Select first sheet
-            self.logger.info("Step 1: Selecting first sheet...")
-            success = self._select_first_sheet()
+            # As per user specification: DON'T CLICK ANYTHING until import popup appears
+            self.logger.info("⏳ Waiting for import popup to appear (not clicking anything)...")
+            time.sleep(3)  # Wait for popup to appear
+            
+            # Step 1: Click OK on "import successful" popup
+            self.logger.info("Step 1: Clicking OK on import successful popup...")
+            success = self._click_popup_ok_locked()
             if not success:
-                return {"success": False, "error": "Failed to select first sheet"}
+                return {"success": False, "error": "Failed to click OK on import popup"}
             
             # Step 2: Click Import button
             self.logger.info("Step 2: Clicking Import button...")
-            success = self._click_import_button()
+            success = self._click_import_button_locked()
             if not success:
                 return {"success": False, "error": "Failed to click Import button"}
             
-            # Step 3: Wait for import to complete (5-10 minutes)
+            # Step 3: Wait for import to complete
             self.logger.info("Step 3: Waiting for import to complete...")
             success = self._wait_for_import_completion()
             if not success:
@@ -239,22 +365,34 @@ class VBSPhase3_ExcelImport:
             self.logger.error(error_msg)
             return {"success": False, "error": error_msg}
     
-    def task_3_4_update_data(self) -> Dict[str, any]:
-        """Task 3.4: Update imported data (Click Update → Wait 1-2 hours)"""
+    def task_3_4_update_data(self) -> Dict[str, Any]:
+        """Task 3.4: Update imported data (Click Update → Wait for popup → Click OK → Close form)"""
         try:
             self.logger.info("🔄 TASK 3.4: Updating imported data...")
             
             # Step 1: Click Update button
             self.logger.info("Step 1: Clicking Update button...")
-            success = self._click_update_button()
+            success = self._click_update_button_locked()
             if not success:
                 return {"success": False, "error": "Failed to click Update button"}
             
-            # Step 2: Wait for update to complete (1-2 hours)
-            self.logger.info("Step 2: Waiting for update to complete (this may take 1-2 hours)...")
+            # Step 2: Wait for "update successful" popup and click OK
+            self.logger.info("Step 2: Waiting for update successful popup...")
             success = self._wait_for_update_completion()
             if not success:
                 return {"success": False, "error": "Update process timed out or failed"}
+            
+            # Step 3: Click OK on update successful popup
+            self.logger.info("Step 3: Clicking OK on update successful popup...")
+            success = self._click_popup_ok_locked()
+            if not success:
+                return {"success": False, "error": "Failed to click OK on update popup"}
+            
+            # Step 4: Close import form
+            self.logger.info("Step 4: Closing import form...")
+            success = self._close_import_form_locked()
+            if not success:
+                return {"success": False, "error": "Failed to close import form"}
             
             self.logger.info("✅ Data update completed successfully")
             return {"success": True, "message": "Data update completed successfully"}
@@ -283,20 +421,34 @@ class VBSPhase3_ExcelImport:
             self.logger.error(f"Error finding Excel file: {e}")
             return None
     
-    def _navigate_to_file(self, file_path: str) -> bool:
-        """Navigate to file in file dialog"""
+    def _navigate_to_file_locked(self, file_path: str) -> bool:
+        """Navigate to file in file dialog using Windows API"""
         try:
             # Click on file path input
             path_x, path_y = self.coordinates["excel_file"]
-            pyautogui.click(path_x, path_y)
+            success = self._click_coordinate_locked(path_x, path_y)
+            if not success:
+                return False
             time.sleep(self.timeouts["button_click"])
             
-            # Clear and enter file path
-            pyautogui.hotkey('ctrl', 'a')
+            # Clear and enter file path using Windows API
+            # Ctrl+A to select all
+            win32gui.PostMessage(self.window_handle, WM_KEYDOWN, VK_CONTROL, 0)
+            win32gui.PostMessage(self.window_handle, WM_KEYDOWN, ord('A'), 0)
+            win32gui.PostMessage(self.window_handle, WM_KEYUP, ord('A'), 0)
+            win32gui.PostMessage(self.window_handle, WM_KEYUP, VK_CONTROL, 0)
             time.sleep(0.2)
-            pyautogui.typewrite(os.path.dirname(file_path))
+            
+            # Type file path
+            success = self._type_text_locked(os.path.dirname(file_path))
+            if not success:
+                return False
             time.sleep(self.timeouts["file_selection"])
-            pyautogui.press('enter')
+            
+            # Press Enter
+            success = self._send_key_locked(VK_RETURN)
+            if not success:
+                return False
             time.sleep(self.timeouts["dialog_open"])
             
             return True
@@ -305,21 +457,27 @@ class VBSPhase3_ExcelImport:
             self.logger.error(f"Failed to navigate to file: {e}")
             return False
     
-    def _select_file_in_dialog(self, filename: str) -> bool:
-        """Select file in file dialog"""
+    def _select_file_in_dialog_locked(self, filename: str) -> bool:
+        """Select file in file dialog using Windows API"""
         try:
             # Click in file list area
             list_x, list_y = self.coordinates["excel_file"]
-            pyautogui.click(list_x, list_y)
+            success = self._click_coordinate_locked(list_x, list_y)
+            if not success:
+                return False
             time.sleep(self.timeouts["button_click"])
             
             # Type filename to select it
-            pyautogui.typewrite(filename)
+            success = self._type_text_locked(filename)
+            if not success:
+                return False
             time.sleep(self.timeouts["file_selection"])
             
             # Click Select/Open button
             select_x, select_y = self.coordinates["open_button"]
-            pyautogui.click(select_x, select_y)
+            success = self._click_coordinate_locked(select_x, select_y)
+            if not success:
+                return False
             time.sleep(self.timeouts["dialog_open"])
             
             return True
@@ -328,17 +486,61 @@ class VBSPhase3_ExcelImport:
             self.logger.error(f"Failed to select file in dialog: {e}")
             return False
     
+    def _click_popup_ok_locked(self) -> bool:
+        """Click OK on popup using Windows API"""
+        try:
+            popup_x, popup_y = self.coordinates["popup_yes"]
+            return self._click_coordinate_locked(popup_x, popup_y)
+            
+        except Exception as e:
+            self.logger.error(f"Failed to click popup OK: {e}")
+            return False
+    
+    def _click_import_button_locked(self) -> bool:
+        """Click Import button using Windows API"""
+        try:
+            import_x, import_y = self.coordinates["import_button"]
+            return self._click_coordinate_locked(import_x, import_y)
+            
+        except Exception as e:
+            self.logger.error(f"Failed to click Import button: {e}")
+            return False
+    
+    def _click_update_button_locked(self) -> bool:
+        """Click Update button using Windows API"""
+        try:
+            update_x, update_y = self.coordinates["update_button"]
+            return self._click_coordinate_locked(update_x, update_y)
+            
+        except Exception as e:
+            self.logger.error(f"Failed to click Update button: {e}")
+            return False
+    
+    def _close_import_form_locked(self) -> bool:
+        """Close import form using Windows API"""
+        try:
+            close_x, close_y = self.coordinates["close_button"]
+            return self._click_coordinate_locked(close_x, close_y)
+            
+        except Exception as e:
+            self.logger.error(f"Failed to close import form: {e}")
+            return False
+    
     def _select_first_sheet(self) -> bool:
-        """Select first sheet in sheet dropdown"""
+        """Select first sheet in sheet dropdown using Windows API"""
         try:
             # Click sheet dropdown
             dropdown_x, dropdown_y = self.coordinates["sheet_dropdown"]
-            pyautogui.click(dropdown_x, dropdown_y)
+            success = self._click_coordinate_locked(dropdown_x, dropdown_y)
+            if not success:
+                return False
             time.sleep(self.timeouts["button_click"])
             
             # Click first sheet option
             sheet_x, sheet_y = self.coordinates["sheet_dropdown"]
-            pyautogui.click(sheet_x, sheet_y)
+            success = self._click_coordinate_locked(sheet_x, sheet_y)
+            if not success:
+                return False
             time.sleep(self.timeouts["button_click"])
             
             return True
@@ -348,26 +550,20 @@ class VBSPhase3_ExcelImport:
             return False
     
     def _click_import_button(self) -> bool:
-        """Click Import button"""
+        """Click Import button using Windows API"""
         try:
             import_x, import_y = self.coordinates["import_button"]
-            pyautogui.click(import_x, import_y)
-            time.sleep(self.timeouts["import_start"])
-            
-            return True
+            return self._click_coordinate_locked(import_x, import_y)
             
         except Exception as e:
             self.logger.error(f"Failed to click Import button: {e}")
             return False
     
     def _click_update_button(self) -> bool:
-        """Click Update button"""
+        """Click Update button using Windows API"""
         try:
             update_x, update_y = self.coordinates["update_button"]
-            pyautogui.click(update_x, update_y)
-            time.sleep(self.timeouts["button_click"])
-            
-            return True
+            return self._click_coordinate_locked(update_x, update_y)
             
         except Exception as e:
             self.logger.error(f"Failed to click Update button: {e}")
@@ -456,8 +652,8 @@ class VBSPhase3_ExcelImport:
             self.logger.error(f"File dialog verification failed: {e}")
             return False
     
-    def run_phase_3_complete(self, date_folder: str) -> Dict[str, any]:
-        """Run complete Phase 3: Excel Import"""
+    def run_phase_3_complete(self, date_folder: str) -> Dict[str, Any]:
+        """Run complete Phase 3: Excel Import with user-specified workflow"""
         try:
             self.logger.info("📊 Starting Phase 3: Excel Import")
             
@@ -488,7 +684,7 @@ class VBSPhase3_ExcelImport:
                 phase_result["errors"].append(f"Task 3.2 failed: {select_result['error']}")
                 return phase_result
             
-            # Task 3.3: Import Excel data
+            # Task 3.3: Import Excel data (with user-specified workflow)
             import_result = self.task_3_3_import_excel_data()
             if import_result["success"]:
                 phase_result["tasks_completed"].append("3.3_import")
@@ -497,7 +693,7 @@ class VBSPhase3_ExcelImport:
                 phase_result["errors"].append(f"Task 3.3 failed: {import_result['error']}")
                 return phase_result
             
-            # Task 3.4: Update data
+            # Task 3.4: Update data (with user-specified workflow)
             update_result = self.task_3_4_update_data()
             if update_result["success"]:
                 phase_result["tasks_completed"].append("3.4_update")
@@ -528,7 +724,7 @@ def test_phase_3():
     phase3 = VBSPhase3_ExcelImport()
     
     # Test with current date folder
-    test_date = "05july"
+    test_date = "09jul"
     
     print(f"\n1. Testing Excel import for {test_date}...")
     result = phase3.run_phase_3_complete(test_date)

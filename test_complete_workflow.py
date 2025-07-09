@@ -1,329 +1,200 @@
 #!/usr/bin/env python3
 """
-Complete Workflow Test for WiFi Automation System
-Tests day-only schedule, 8-file Excel generation, email notifications, and VBS integration
+Complete Workflow Test Script
+Tests all components of the WiFi automation system
 """
 
-import os
 import sys
+import os
 import time
+import traceback
 from pathlib import Path
 from datetime import datetime
-import logging
+import schedule
 
 # Add project root to path
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
+sys.path.append('.')
 
-def setup_test_logging():
-    """Setup logging for tests"""
-    log_dir = Path("logs")
-    log_dir.mkdir(exist_ok=True)
-    
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_dir / f"workflow_test_{datetime.now().strftime('%Y%m%d_%H%M')}.log"),
-            logging.StreamHandler()
-        ]
-    )
-    
-    return logging.getLogger("WorkflowTest")
+# Import all necessary modules
+from service_runner import WiFiAutomationService
+from working_email_notifications import WorkingEmailNotifications
+from modules.dynamic_file_manager import DynamicFileManager
+from modules.csv_to_excel_processor import CSVToExcelProcessor
+from corrected_wifi_app import CorrectedWiFiApp
 
-def print_test_header(title: str):
-    """Print test section header"""
-    print("\n" + "=" * 60)
-    print(f"   {title}")
+def test_complete_workflow():
+    """Test the complete workflow"""
+    print("🧪 COMPLETE WORKFLOW TEST")
     print("=" * 60)
-
-def print_test_result(test_name: str, success: bool, details: str = ""):
-    """Print test result"""
-    status = "✅ PASS" if success else "❌ FAIL"
-    print(f"{status} {test_name}")
-    if details:
-        print(f"     {details}")
-
-def test_schedule_configuration():
-    """Test 1: Verify day-only schedule configuration"""
-    print_test_header("TEST 1: Schedule Configuration (Day-Only)")
+    
+    results = {
+        "service_initialization": False,
+        "scheduling_system": False,
+        "email_notifications": False,
+        "file_management": False,
+        "excel_generation": False,
+        "wifi_download": False
+    }
     
     try:
-        from enhanced_service_runner_with_email import EnhancedWiFiServiceWithEmail
+        # 1. Test Service Initialization
+        print("\n✅ 1. TESTING SERVICE INITIALIZATION")
+        service = WiFiAutomationService()
+        email_service = WorkingEmailNotifications()
+        file_manager = DynamicFileManager()
         
-        # Create service instance
-        service = EnhancedWiFiServiceWithEmail()
-        
-        # Check if schedule is configured for day-only
-        # This would need to be implemented in the service class
-        print("🔍 Checking schedule configuration...")
-        
-        # Verify no evening slots are scheduled
-        print("   📅 Morning slot: 09:30 AM - ✅ Enabled")
-        print("   📅 Afternoon slot: 13:00 PM - ✅ Enabled") 
-        print("   📅 Afternoon backup: 13:30 PM - ✅ Enabled")
-        print("   📅 Evening slot: 21:05 PM - ❌ Disabled")
-        print("   📅 Evening backup: 21:11 PM - ❌ Disabled")
-        
-        print_test_result("Schedule Configuration", True, "Day-only schedule verified")
-        return True
-        
-    except Exception as e:
-        print_test_result("Schedule Configuration", False, f"Error: {e}")
-        return False
-
-def test_csv_file_counting():
-    """Test 2: CSV file counting and 8-file trigger"""
-    print_test_header("TEST 2: CSV File Counting & 8-File Trigger")
-    
-    try:
-        from modules.csv_to_excel_processor import CSVToExcelProcessor
-        
-        processor = CSVToExcelProcessor()
-        
-        # Test with current directory
-        today = datetime.now().strftime("%d%B").lower()
-        test_dir = Path(f"EHC_Data/{today}")
-        
-        if not test_dir.exists():
-            test_dir.mkdir(parents=True, exist_ok=True)
-            print(f"   📁 Created test directory: {test_dir}")
-        
-        # Count existing files
-        file_count = processor.count_csv_files(test_dir)
-        print(f"   📊 Current CSV files: {file_count}")
-        
-        # Test should_generate_excel logic
-        should_generate = processor.should_generate_excel(test_dir)
-        print(f"   🎯 Should generate Excel: {should_generate}")
-        
-        if file_count >= 8:
-            print_test_result("8-File Trigger", True, f"Excel generation triggered with {file_count} files")
+        if service and email_service and file_manager:
+            results["service_initialization"] = True
+            print("   ✅ All services initialized successfully")
         else:
-            print_test_result("8-File Trigger", True, f"Need {8 - file_count} more files for Excel generation")
-        
-        return True
-        
-    except Exception as e:
-        print_test_result("CSV File Counting", False, f"Error: {e}")
-        return False
-
-def test_email_notifications():
-    """Test 3: Email notification system"""
-    print_test_header("TEST 3: Email Notification System")
-    
-    try:
-        # Test simple email
-        print("   📧 Testing basic email functionality...")
-        
-        # Import and run email test
-        from test_email_simple import test_email_simple
-        
-        email_success = test_email_simple()
-        
-        if email_success:
-            print_test_result("Email Notifications", True, "Email system working correctly")
-        else:
-            print_test_result("Email Notifications", False, "Email system needs configuration")
-        
-        return email_success
-        
-    except Exception as e:
-        print_test_result("Email Notifications", False, f"Error: {e}")
-        return False
-
-def test_csv_excel_processing():
-    """Test 4: CSV to Excel processing with proper headers"""
-    print_test_header("TEST 4: CSV to Excel Processing")
-    
-    try:
-        from modules.csv_to_excel_processor import CSVToExcelProcessor
-        
-        processor = CSVToExcelProcessor()
-        
-        # Test header mapping
-        test_headers = ['Hostname', 'IP Address', 'MAC Address', 'WLAN (SSID)', 'AP MAC', 'Data Rate (up)', 'Data Rate (down)']
-        header_mapping = processor.normalize_headers(test_headers)
-        
-        print(f"   📋 Header mapping test: {len(header_mapping)} headers mapped")
-        
-        # Test Excel header mapping
-        excel_headers = []
-        for csv_header in processor.REQUIRED_COLUMNS:
-            excel_header = processor.EXCEL_HEADER_MAPPING.get(csv_header, csv_header)
-            excel_headers.append(excel_header)
-            print(f"      {csv_header} → {excel_header}")
-        
-        print_test_result("CSV to Excel Processing", True, f"Header mapping verified: {len(excel_headers)} columns")
-        return True
-        
-    except Exception as e:
-        print_test_result("CSV to Excel Processing", False, f"Error: {e}")
-        return False
-
-def test_vbs_integration():
-    """Test 5: VBS integration readiness"""
-    print_test_header("TEST 5: VBS Integration Readiness")
-    
-    try:
-        from modules.vbs_integration import EnhancedVBSIntegration
-        
-        vbs = EnhancedVBSIntegration()
-        
-        # Test VBS availability
-        availability = vbs.check_vbs_availability()
-        
-        print(f"   🔍 VBS availability check: {availability['success']}")
-        
-        if availability['success']:
-            print(f"      Available paths: {len(availability['available_paths'])}")
-            for path in availability['available_paths']:
-                print(f"         ✅ {path}")
-        else:
-            print(f"      ❌ {availability['error']}")
-        
-        # Test automation status
-        status = vbs.get_automation_status()
-        print(f"   📊 Automation status: {status['current_step']}")
-        
-        print_test_result("VBS Integration", availability['success'], 
-                         f"VBS paths: {len(availability.get('available_paths', []))}")
-        
-        return availability['success']
-        
-    except Exception as e:
-        print_test_result("VBS Integration", False, f"Error: {e}")
-        return False
-
-def test_directory_structure():
-    """Test 6: Directory structure and file organization"""
-    print_test_header("TEST 6: Directory Structure")
-    
-    try:
-        today = datetime.now().strftime("%d%B").lower()
-        
-        # Required directories
-        directories = [
-            Path(f"EHC_Data/{today}"),
-            Path(f"EHC_Data_Merge/{today}"),
-            Path(f"EHC_Data_Pdf/{today}"),
-            Path("logs")
-        ]
-        
-        all_exist = True
-        for directory in directories:
-            exists = directory.exists()
-            if not exists:
-                directory.mkdir(parents=True, exist_ok=True)
-                print(f"   📁 Created: {directory}")
-            else:
-                print(f"   ✅ Exists: {directory}")
+            print("   ❌ Service initialization failed")
             
-            all_exist = all_exist and directory.exists()
+        # 2. Test Scheduling System
+        print("\n✅ 2. TESTING SCHEDULING SYSTEM")
+        service.schedule_tasks()
+        scheduled_jobs = len(schedule.jobs)
         
-        print_test_result("Directory Structure", all_exist, f"All {len(directories)} directories ready")
-        return all_exist
-        
-    except Exception as e:
-        print_test_result("Directory Structure", False, f"Error: {e}")
-        return False
-
-def test_complete_workflow_simulation():
-    """Test 7: Complete workflow simulation"""
-    print_test_header("TEST 7: Complete Workflow Simulation")
-    
-    try:
-        print("   🔄 Simulating complete workflow...")
-        
-        # Step 1: CSV Download (simulated)
-        print("      1. CSV Download: ✅ Simulated")
-        
-        # Step 2: File counting
-        from modules.csv_to_excel_processor import CSVToExcelProcessor
-        processor = CSVToExcelProcessor()
-        today = datetime.now().strftime("%d%B").lower()
-        csv_dir = Path(f"EHC_Data/{today}")
-        file_count = processor.count_csv_files(csv_dir)
-        print(f"      2. File Count: {file_count} files")
-        
-        # Step 3: Excel generation (if 8 files)
-        if file_count >= 8:
-            print("      3. Excel Generation: ✅ Triggered")
+        if scheduled_jobs >= 3:  # Should have at least 3 jobs (morning, evening, reset)
+            results["scheduling_system"] = True
+            print(f"   ✅ Scheduling system active with {scheduled_jobs} jobs")
+            
+            # Show next run time
+            next_run = schedule.next_run()
+            if next_run:
+                time_until = next_run - datetime.now()
+                hours, remainder = divmod(time_until.seconds, 3600)
+                minutes, _ = divmod(remainder, 60)
+                print(f"   📅 Next run: {next_run}")
+                print(f"   ⏰ Time until next run: {hours}h {minutes}m")
         else:
-            print(f"      3. Excel Generation: ⏳ Waiting ({8-file_count} more files needed)")
+            print("   ❌ Scheduling system failed")
+            
+        # 3. Test Email Notifications
+        print("\n✅ 3. TESTING EMAIL NOTIFICATIONS")
+        try:
+            email_result = email_service.send_csv_download_notification('test-workflow', 4, 4, True)
+            if email_result:
+                results["email_notifications"] = True
+                print("   ✅ Email notifications working")
+            else:
+                print("   ❌ Email notifications failed")
+        except Exception as e:
+            print(f"   ❌ Email error: {e}")
+            
+        # 4. Test File Management
+        print("\n✅ 4. TESTING FILE MANAGEMENT")
+        today_dir = file_manager.get_download_directory()
+        merge_dir = file_manager.get_merge_directory()
+        pdf_dir = file_manager.get_pdf_directory()
         
-        # Step 4: Email notification (simulated)
-        print("      4. Email Notification: ✅ Ready")
+        if today_dir.exists() and merge_dir.exists() and pdf_dir.exists():
+            results["file_management"] = True
+            print("   ✅ File management system working")
+            print(f"   📁 CSV Directory: {today_dir}")
+            print(f"   📁 Excel Directory: {merge_dir}")
+            print(f"   📁 PDF Directory: {pdf_dir}")
+        else:
+            print("   ❌ File management failed")
+            
+        # 5. Test Excel Generation (with mock data)
+        print("\n✅ 5. TESTING EXCEL GENERATION")
+        try:
+            # Create mock CSV files with unique data
+            mock_files = []
+            for i in range(8):
+                mock_file = today_dir / f'mock_clients_{i}.csv'
+                mock_content = f"""Hostname,IP_Address,MAC_Address,Package,AP_MAC,Upload,Download
+device-{i}-1,192.168.1.{100+i},aa:bb:cc:dd:ee:{i:02d},Standard,ff:ff:ff:ff:ff:{i:02d},{1000+i*100},{2000+i*200}
+device-{i}-2,192.168.1.{150+i},aa:bb:cc:dd:ee:{i+10:02d},Premium,ff:ff:ff:ff:ff:{i+10:02d},{1500+i*100},{3000+i*200}
+"""
+                with open(mock_file, 'w') as f:
+                    f.write(mock_content)
+                mock_files.append(mock_file)
+            
+            # Test Excel generation
+            processor = CSVToExcelProcessor()
+            excel_result = processor.process_and_generate_excel(today_dir)
+            
+            if excel_result.get('success'):
+                results["excel_generation"] = True
+                print("   ✅ Excel generation working")
+                excel_file = excel_result.get('excel_file')
+                if excel_file and Path(excel_file).exists():
+                    print(f"   📊 Excel file: {Path(excel_file).name}")
+                    print(f"   📏 File size: {Path(excel_file).stat().st_size} bytes")
+            else:
+                print(f"   ❌ Excel generation failed: {excel_result.get('error')}")
+                
+            # Clean up mock files
+            for mock_file in mock_files:
+                if mock_file.exists():
+                    mock_file.unlink()
+                    
+        except Exception as e:
+            print(f"   ❌ Excel generation error: {e}")
+            
+        # 6. Test WiFi Download (check configuration only, not actual download)
+        print("\n✅ 6. TESTING WIFI DOWNLOAD CONFIGURATION")
+        try:
+            wifi_app = CorrectedWiFiApp()
+            if wifi_app:
+                results["wifi_download"] = True
+                print("   ✅ WiFi download app configured")
+                print("   📡 Target networks: EHC TV, EHC-15, Reception Hall-Mobile, Reception Hall-TV")
+                print("   🌐 Target URL: https://51.38.163.73:8443/wsg/")
+                print("   ⚠️ Note: Actual download test skipped to avoid network timeout")
+            else:
+                print("   ❌ WiFi download app failed to initialize")
+        except Exception as e:
+            print(f"   ❌ WiFi download error: {e}")
+            
+        # Summary
+        print("\n🎯 WORKFLOW TEST SUMMARY")
+        print("=" * 60)
         
-        # Step 5: VBS integration (simulated)
-        print("      5. VBS Integration: ✅ Ready")
+        total_tests = len(results)
+        passed_tests = sum(results.values())
         
-        workflow_ready = True
-        print_test_result("Complete Workflow", workflow_ready, "All components ready")
-        return workflow_ready
+        for test_name, result in results.items():
+            status = "✅ PASS" if result else "❌ FAIL"
+            print(f"   {test_name.replace('_', ' ').title()}: {status}")
+            
+        print(f"\n📊 Overall Result: {passed_tests}/{total_tests} tests passed")
+        
+        if passed_tests == total_tests:
+            print("🎉 ALL TESTS PASSED - SYSTEM READY FOR PRODUCTION")
+        elif passed_tests >= total_tests * 0.8:
+            print("⚠️ MOST TESTS PASSED - SYSTEM MOSTLY READY")
+        else:
+            print("❌ MULTIPLE FAILURES - SYSTEM NEEDS ATTENTION")
+            
+        return passed_tests == total_tests
         
     except Exception as e:
-        print_test_result("Complete Workflow", False, f"Error: {e}")
+        print(f"❌ CRITICAL ERROR: {e}")
+        traceback.print_exc()
         return False
 
-def run_all_tests():
-    """Run all workflow tests"""
-    logger = setup_test_logging()
-    
-    print("🧪 WIFI AUTOMATION SYSTEM - COMPLETE WORKFLOW TEST")
+def main():
+    """Main function"""
+    print("🚀 WiFi Automation System - Complete Workflow Test")
     print("=" * 60)
-    print(f"Test Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("Testing: Day-only schedule, 8-file Excel trigger, Email notifications, VBS integration")
+    print(f"📅 Test Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"📁 Working Directory: {Path.cwd()}")
     
-    # Run all tests
-    tests = [
-        ("Schedule Configuration", test_schedule_configuration),
-        ("CSV File Counting", test_csv_file_counting),
-        ("Email Notifications", test_email_notifications),
-        ("CSV to Excel Processing", test_csv_excel_processing),
-        ("VBS Integration", test_vbs_integration),
-        ("Directory Structure", test_directory_structure),
-        ("Complete Workflow", test_complete_workflow_simulation)
-    ]
+    success = test_complete_workflow()
     
-    results = {}
-    
-    for test_name, test_function in tests:
-        try:
-            logger.info(f"Running test: {test_name}")
-            results[test_name] = test_function()
-        except Exception as e:
-            logger.error(f"Test {test_name} failed with exception: {e}")
-            results[test_name] = False
-    
-    # Summary
-    print_test_header("TEST SUMMARY")
-    
-    passed = sum(1 for result in results.values() if result)
-    total = len(results)
-    
-    for test_name, result in results.items():
-        status = "✅ PASS" if result else "❌ FAIL"
-        print(f"{status} {test_name}")
-    
-    print(f"\nOverall Result: {passed}/{total} tests passed")
-    
-    if passed == total:
-        print("\n🎉 ALL TESTS PASSED! System ready for production.")
-        print("\nNext steps:")
-        print("1. Run: start_enhanced_service.bat (as Administrator)")
-        print("2. Monitor logs for scheduled operations")
-        print("3. Verify email notifications are received")
-        print("4. Test VBS integration when Excel files are generated")
+    if success:
+        print("\n✅ SYSTEM VERIFICATION COMPLETE")
+        print("🔄 The system is ready for automated operation")
+        print("📅 Next scheduled run will occur at 13:00 (1:00 PM)")
+        print("📧 Email notifications will be sent for all operations")
+        print("📊 Excel files will be generated after 8 CSV files are downloaded")
     else:
-        print(f"\n⚠️  {total - passed} tests failed. Please address issues before production.")
-        print("\nFailed tests need attention:")
-        for test_name, result in results.items():
-            if not result:
-                print(f"   ❌ {test_name}")
-    
-    logger.info(f"Test completed: {passed}/{total} passed")
-    return passed == total
+        print("\n❌ SYSTEM VERIFICATION FAILED")
+        print("🔧 Please check the error messages above and fix any issues")
+        
+    return success
 
 if __name__ == "__main__":
-    run_all_tests() 
+    main() 

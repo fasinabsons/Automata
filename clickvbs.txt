@@ -1,0 +1,27 @@
+[17:05, 7/5/2025] ME: Arrow buttton
+On 23,64
+Sales and distribution on 212,170
+Pos 179,601
+Wifi user registration 288,679
+New button 104,107
+Credit 368,292
+Import EHC Users Mac Address checkbox at 1192,699
+3 dots at 783,664
+Popup yes button 1047,681
+Excel file from the folder at 591,455
+Open at 783,885
+Sheet 1 from drop down list at 386,716
+Import button at 708,692
+Ehc user detail at 285,739
+
+Update button at 1541,893
+[18:53, 7/5/2025] ME: Reports folder 162,648
+Pos inside report 219,770
+Wifi active users count 310,887(double click)
+From date mouse coordinates
+821,151
+To date
+983,155
+The print button 76,96
+
+Export button 74,57

@@ -11,7 +11,7 @@ import logging
 import win32gui
 import win32con
 import pyautogui
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 import traceback
 from datetime import datetime, date
 from pathlib import Path
@@ -129,7 +129,7 @@ class VBSPhase4_PDFGeneration:
         self.window_handle = window_handle
         self.logger.info(f"Window handle set: {window_handle}")
     
-    def task_4_1_navigate_to_reports(self) -> Dict[str, any]:
+    def task_4_1_navigate_to_reports(self) -> Dict[str, Any]:
         """Task 4.1: Navigate to Reports → POS → WiFi User Count"""
         try:
             self.logger.info("📊 TASK 4.1: Navigating to WiFi User Count reports...")
@@ -186,7 +186,7 @@ class VBSPhase4_PDFGeneration:
             self.logger.error(traceback.format_exc())
             return {"success": False, "error": error_msg}
     
-    def task_4_2_set_date_range(self) -> Dict[str, any]:
+    def task_4_2_set_date_range(self) -> Dict[str, Any]:
         """Task 4.2: Set date range (Current month 1st to current day, year 2025)"""
         try:
             self.logger.info("📅 TASK 4.2: Setting date range for report...")
@@ -229,7 +229,7 @@ class VBSPhase4_PDFGeneration:
             self.logger.error(error_msg)
             return {"success": False, "error": error_msg}
     
-    def task_4_3_export_pdf(self, date_folder: str) -> Dict[str, any]:
+    def task_4_3_export_pdf(self, date_folder: str) -> Dict[str, Any]:
         """Task 4.3: Export report as PDF"""
         try:
             self.logger.info("📄 TASK 4.3: Exporting report as PDF...")
@@ -452,7 +452,7 @@ class VBSPhase4_PDFGeneration:
             self.logger.error(f"WiFi report verification failed: {e}")
             return False
     
-    def run_phase_4_complete(self, date_folder: str) -> Dict[str, any]:
+    def run_phase_4_complete(self, date_folder: str) -> Dict[str, Any]:
         """Run complete Phase 4: PDF Generation"""
         try:
             self.logger.info("📄 Starting Phase 4: PDF Generation")

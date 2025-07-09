@@ -242,3 +242,646 @@ NOTES:
 - Integration with existing system is prioritized
 - Maintenance and monitoring are planned from the start
 =============================================================================== 
+
+import os
+import sys
+import time
+import logging
+import shutil
+import socket
+import subprocess
+import pandas as pd
+import win32gui
+import win32con
+import win32api
+import win32process
+import win32clipboard
+import pythoncom
+import schedule
+from datetime import datetime, timedelta
+from pathlib import Path
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
+import win32com.client
+import psutil
+from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.triggers.cron import CronTrigger
+import requests
+import json
+
+class VBApplicationAutomation:
+    def __init__(self, config_file="config.json"):
+        """Initialize the VB Application Automation system"""
+        self.config = self.load_config(config_file)
+        self.setup_logging()
+        self.app_process = None
+        self.app_window = None
+        self.excel_file_path = None
+        self.pdf_file_path = None
+        
+        # Application paths
+        self.shortcut_path = r"C:\Users\Lenovo\Music\moonflower\AbsonsItERP.exe - Shortcut.lnk"
+        self.network_path = r"\\192.168.10.16\e\ArabianLive\ArabianLive_MoonFlower\AbsonsItERP.exe"
+        
+        # Credentials
+        self.username = "Vj"
+        self.password = ""
+        
+        # Folders
+        self.output_folder = self.config.get("output_folder", "output")
+        self.excel_folder = self.config.get("excel_folder", "excel_files")
+        self.pdf_folder = self.config.get("pdf_folder", "pdf_reports")
+        
+        self.create_folders()
+        
+    def load_config(self, config_file):
+        """Load configuration from JSON file"""
+        try:
+            with open(config_file, 'r') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            # Create default config
+            default_config = {
+                "output_folder": "output",
+                "excel_folder": "excel_files",
+                "pdf_folder": "pdf_reports",
+                "email_recipients": ["user@company.com"],
+                "email_subject": "Monthly WiFi Active Users Report",
+                "schedule_time": "09:00",
+                "network_ip": "192.168.10.16",
+                "network_port": 445
+            }
+            with open(config_file, 'w') as f:
+                json.dump(default_config, f, indent=4)
+            return default_config
+    
+    def setup_logging(self):
+        """Setup logging configuration"""
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler('vb_automation.log'),
+                logging.StreamHandler()
+            ]
+        )
+        self.logger = logging.getLogger(__name__)
+    
+    def create_folders(self):
+        """Create necessary folders if they don't exist"""
+        folders = [self.output_folder, self.excel_folder, self.pdf_folder]
+        for folder in folders:
+            Path(folder).mkdir(parents=True, exist_ok=True)
+    
+    def check_network_connectivity(self):
+        """Check if network path is accessible"""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            result = sock.connect_ex((self.config["network_ip"], self.config["network_port"]))
+            sock.close()
+            return result == 0
+        except Exception as e:
+            self.logger.error(f"Network connectivity check failed: {e}")
+            return False
+    
+    def launch_application(self):
+        """Launch the VB application with fallback mechanism"""
+        app_launched = False
+        
+        # Try shortcut first
+        if os.path.exists(self.shortcut_path):
+            try:
+                self.logger.info("Attempting to launch via shortcut...")
+                self.app_process = subprocess.Popen([self.shortcut_path])
+                time.sleep(5)  # Wait for app to start
+                app_launched = True
+                self.logger.info("Application launched via shortcut successfully")
+            except Exception as e:
+                self.logger.warning(f"Shortcut launch failed: {e}")
+        
+        # Try network path if shortcut fails
+        if not app_launched and self.check_network_connectivity():
+            try:
+                self.logger.info("Attempting to launch via network path...")
+                self.app_process = subprocess.Popen([self.network_path])
+                time.sleep(5)  # Wait for app to start
+                app_launched = True
+                self.logger.info("Application launched via network path successfully")
+            except Exception as e:
+                self.logger.error(f"Network path launch failed: {e}")
+        
+        if not app_launched:
+            raise Exception("Failed to launch application via both shortcut and network path")
+        
+        # Find the application window
+        self.find_app_window()
+        
+    def find_app_window(self):
+        """Find the application window handle"""
+        def enum_windows_callback(hwnd, windows):
+            if win32gui.IsWindowVisible(hwnd):
+                window_title = win32gui.GetWindowText(hwnd)
+                if "AbsonsItERP" in window_title or "ERP" in window_title:
+                    windows.append(hwnd)
+            return True
+        
+        windows = []
+        win32gui.EnumWindows(enum_windows_callback, windows)
+        
+        if windows:
+            self.app_window = windows[0]
+            win32gui.SetForegroundWindow(self.app_window)
+            self.logger.info(f"Found application window: {self.app_window}")
+        else:
+            raise Exception("Could not find application window")
+    
+    def send_keys_to_window(self, keys, delay=0.1):
+        """Send keys to the application window"""
+        if self.app_window:
+            win32gui.SetForegroundWindow(self.app_window)
+            time.sleep(delay)
+            for key in keys:
+                if isinstance(key, str):
+                    win32api.keybd_event(ord(key.upper()), 0, 0, 0)
+                    win32api.keybd_event(ord(key.upper()), 0, win32con.KEYEVENTF_KEYUP, 0)
+                else:
+                    win32api.keybd_event(key, 0, 0, 0)
+                    win32api.keybd_event(key, 0, win32con.KEYEVENTF_KEYUP, 0)
+                time.sleep(delay)
+    
+    def login_to_application(self):
+        """Login to the VB application"""
+        self.logger.info("Logging into application...")
+        
+        # Set date to 01/01/2023 (assuming date field is first)
+        time.sleep(2)
+        self.send_keys_to_window("01/01/2023")
+        
+        # Tab to username field
+        win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(0.5)
+        
+        # Enter username
+        self.send_keys_to_window(self.username)
+        
+        # Tab to password field
+        win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(0.5)
+        
+        # Enter password (empty in this case)
+        if self.password:
+            self.send_keys_to_window(self.password)
+        
+        # Press Enter to login
+        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        
+        time.sleep(3)  # Wait for login to complete
+        self.logger.info("Login completed")
+    
+    def navigate_to_wifi_registration(self):
+        """Navigate to WiFi User Registration"""
+        self.logger.info("Navigating to WiFi User Registration...")
+        
+        # Click arrow icon (right arrow)
+        # This might need to be adjusted based on the actual UI
+        time.sleep(2)
+        
+        # Simulate clicking on Sales And Distribution
+        # Using keyboard navigation as it's more reliable
+        self.send_keys_to_window("s")  # First letter of Sales
+        time.sleep(1)
+        
+        # Press Enter to expand
+        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(1)
+        
+        # Navigate to POS
+        self.send_keys_to_window("p")  # First letter of POS
+        time.sleep(1)
+        
+        # Press Enter to expand
+        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(1)
+        
+        # Navigate to WiFi User Registration
+        self.send_keys_to_window("w")  # First letter of WiFi
+        time.sleep(1)
+        
+        # Press Enter to select
+        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(2)
+        
+        self.logger.info("Navigation to WiFi User Registration completed")
+    
+    def configure_import_settings(self):
+        """Configure import settings for Excel file"""
+        self.logger.info("Configuring import settings...")
+        
+        # Click "New" button (usually Alt+N)
+        win32api.keybd_event(win32con.VK_MENU, 0, 0, 0)  # Alt key down
+        win32api.keybd_event(ord('N'), 0, 0, 0)  # N key
+        win32api.keybd_event(ord('N'), 0, win32con.KEYEVENTF_KEYUP, 0)
+        win32api.keybd_event(win32con.VK_MENU, 0, win32con.KEYEVENTF_KEYUP, 0)  # Alt key up
+        time.sleep(2)
+        
+        # Click "Credit" radio button (using Tab navigation)
+        # This might need adjustment based on UI layout
+        for _ in range(5):  # Navigate to Credit radio button
+            win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
+            win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
+            time.sleep(0.3)
+        
+        # Press Space to select radio button
+        win32api.keybd_event(win32con.VK_SPACE, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_SPACE, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(1)
+        
+        # Navigate to and check "Import EHC Users Mac Address" checkbox
+        for _ in range(3):  # Navigate to checkbox
+            win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
+            win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
+            time.sleep(0.3)
+        
+        # Check the checkbox
+        win32api.keybd_event(win32con.VK_SPACE, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_SPACE, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(1)
+        
+        # Click "..." button to browse for file
+        win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(0.3)
+        
+        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(1)
+        
+        # Handle popup - click "Yes"
+        win32api.keybd_event(ord('Y'), 0, 0, 0)
+        win32api.keybd_event(ord('Y'), 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(1)
+        
+        self.logger.info("Import settings configured")
+    
+    def select_excel_file(self):
+        """Select the merged Excel file"""
+        self.logger.info("Selecting Excel file...")
+        
+        # Get the most recent Excel file from the excel folder
+        excel_files = list(Path(self.excel_folder).glob("*.xlsx"))
+        if not excel_files:
+            excel_files = list(Path(self.excel_folder).glob("*.xls"))
+        
+        if not excel_files:
+            raise Exception("No Excel files found in the excel folder")
+        
+        # Get the most recent file
+        self.excel_file_path = max(excel_files, key=os.path.getctime)
+        
+        # Type the file path
+        self.send_keys_to_window(str(self.excel_file_path))
+        
+        # Press Enter to select file
+        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(2)
+        
+        self.logger.info(f"Excel file selected: {self.excel_file_path}")
+    
+    def configure_sheet_and_table(self):
+        """Configure sheet and table settings"""
+        self.logger.info("Configuring sheet and table settings...")
+        
+        # Select "Sheet 1" from dropdown (assuming it's already selected or first option)
+        # Navigate to dropdown and select
+        win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(0.5)
+        
+        # Open dropdown
+        win32api.keybd_event(win32con.VK_DOWN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_DOWN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(0.5)
+        
+        # Select first option (Sheet 1)
+        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(1)
+        
+        # Navigate to table header dropdown
+        win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(0.5)
+        
+        # Select "EHC User Detail"
+        win32api.keybd_event(win32con.VK_DOWN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_DOWN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(0.5)
+        
+        # Find and select "EHC User Detail"
+        self.send_keys_to_window("EHC User Detail")
+        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(2)
+        
+        self.logger.info("Sheet and table settings configured")
+    
+    def wait_for_processing_and_update(self):
+        """Wait for data processing and handle popup"""
+        self.logger.info("Waiting for data processing...")
+        
+        # Wait for the application to process data
+        # This might take a while, so we'll wait and check periodically
+        max_wait_time = 300  # 5 minutes maximum
+        wait_interval = 10   # Check every 10 seconds
+        
+        for _ in range(max_wait_time // wait_interval):
+            time.sleep(wait_interval)
+            
+            # Check if popup appeared (this is application-specific)
+            # For now, we'll just wait for a reasonable amount of time
+            if self.check_for_popup():
+                break
+        
+        # Handle popup - click OK
+        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(2)
+        
+        # Click "Update" button
+        win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(0.5)
+        
+        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(3)
+        
+        self.logger.info("Data processing and update completed")
+    
+    def check_for_popup(self):
+        """Check if a popup window appeared"""
+        # This is a simplified check - in reality, you'd need to check for specific popup windows
+        return True  # Placeholder
+    
+    def navigate_to_reports(self):
+        """Navigate to WiFi Active Users Count report"""
+        self.logger.info("Navigating to reports...")
+        
+        # Close current window
+        win32api.keybd_event(win32con.VK_ESCAPE, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_ESCAPE, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(1)
+        
+        # Navigate to arrow icon again
+        # Click arrow icon, Sales And Distribution, Reports, POS, WiFi Active Users Count
+        self.send_keys_to_window("s")  # Sales And Distribution
+        time.sleep(1)
+        
+        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(1)
+        
+        # Navigate to Reports
+        self.send_keys_to_window("r")  # Reports
+        time.sleep(1)
+        
+        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(1)
+        
+        # Navigate to POS under Reports
+        self.send_keys_to_window("p")  # POS
+        time.sleep(1)
+        
+        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(1)
+        
+        # Navigate to WiFi Active Users Count
+        self.send_keys_to_window("w")  # WiFi Active Users Count
+        time.sleep(1)
+        
+        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(2)
+        
+        self.logger.info("Navigation to reports completed")
+    
+    def set_date_range_and_generate_report(self):
+        """Set date range and generate PDF report"""
+        self.logger.info("Setting date range and generating report...")
+        
+        # Get current date and first day of month
+        today = datetime.now()
+        first_day = today.replace(day=1)
+        
+        # Set start date (first day of month)
+        start_date = first_day.strftime("%d/%m/%Y")
+        end_date = today.strftime("%d/%m/%Y")
+        
+        # Enter start date
+        self.send_keys_to_window(start_date)
+        
+        # Tab to end date field
+        win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(0.5)
+        
+        # Enter end date
+        self.send_keys_to_window(end_date)
+        
+        # Click Print button
+        win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(0.5)
+        
+        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        
+        # Wait for report to load (this can take a long time)
+        self.logger.info("Waiting for report to load...")
+        time.sleep(30)  # Wait 30 seconds, adjust as needed
+        
+        # Click export button (second icon with download arrow)
+        # This might need to be adjusted based on the actual UI
+        win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(0.5)
+        
+        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(2)
+        
+        # Select "Acrobat format(pdf)" from dropdown
+        self.send_keys_to_window("Acrobat format(pdf)")
+        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(1)
+        
+        # Click OK
+        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(2)
+        
+        # Save PDF with correct name
+        pdf_name = f"Moon Flower Active Users_{today.strftime('%d%m%Y')}.pdf"
+        self.pdf_file_path = os.path.join(self.pdf_folder, pdf_name)
+        
+        self.send_keys_to_window(self.pdf_file_path)
+        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(5)
+        
+        self.logger.info(f"PDF report generated: {self.pdf_file_path}")
+    
+    def close_application(self):
+        """Close the VB application"""
+        self.logger.info("Closing application...")
+        
+        if self.app_window:
+            win32gui.PostMessage(self.app_window, win32con.WM_CLOSE, 0, 0)
+        
+        if self.app_process:
+            try:
+                self.app_process.terminate()
+                self.app_process.wait(timeout=10)
+            except:
+                self.app_process.kill()
+        
+        self.logger.info("Application closed")
+    
+    def send_email_with_pdf(self):
+        """Send email with PDF attachment using Outlook"""
+        self.logger.info("Sending email with PDF attachment...")
+        
+        try:
+            # Initialize Outlook
+            outlook = win32com.client.Dispatch("Outlook.Application")
+            mail = outlook.CreateItem(0)  # 0 = olMailItem
+            
+            # Set email properties
+            mail.To = ";".join(self.config["email_recipients"])
+            mail.Subject = self.config["email_subject"]
+            
+            # Email body with signature
+            today = datetime.now().strftime("%B %d, %Y")
+            mail.Body = f"""
+Dear Team,
+
+Please find attached the monthly WiFi Active Users report for {today}.
+
+This report contains the count of active WiFi users for the current month.
+
+Best regards,
+Automated Reporting System
+Moon Flower IT Department
+            """
+            
+            # Add PDF attachment
+            if self.pdf_file_path and os.path.exists(self.pdf_file_path):
+                mail.Attachments.Add(self.pdf_file_path)
+            
+            # Send email
+            mail.Send()
+            
+            self.logger.info("Email sent successfully")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to send email: {e}")
+            raise
+    
+    def run_automation(self):
+        """Run the complete automation process"""
+        try:
+            self.logger.info("Starting VB Application Automation...")
+            
+            # Step 1: Launch application
+            self.launch_application()
+            
+            # Step 2: Login
+            self.login_to_application()
+            
+            # Step 3: Navigate to WiFi User Registration
+            self.navigate_to_wifi_registration()
+            
+            # Step 4: Configure import settings
+            self.configure_import_settings()
+            
+            # Step 5: Select Excel file
+            self.select_excel_file()
+            
+            # Step 6: Configure sheet and table
+            self.configure_sheet_and_table()
+            
+            # Step 7: Wait for processing and update
+            self.wait_for_processing_and_update()
+            
+            # Step 8: Navigate to reports
+            self.navigate_to_reports()
+            
+            # Step 9: Generate PDF report
+            self.set_date_range_and_generate_report()
+            
+            # Step 10: Close application
+            self.close_application()
+            
+            self.logger.info("Automation completed successfully")
+            
+        except Exception as e:
+            self.logger.error(f"Automation failed: {e}")
+            self.close_application()
+            raise
+    
+    def schedule_email_sending(self):
+        """Schedule email sending for the day after PDF generation"""
+        if self.pdf_file_path and os.path.exists(self.pdf_file_path):
+            # Get PDF creation date
+            pdf_creation_time = datetime.fromtimestamp(os.path.getctime(self.pdf_file_path))
+            
+            # Schedule email for the next day
+            send_date = pdf_creation_time + timedelta(days=1)
+            
+            # If PDF was created on Friday, email will be sent on Saturday
+            scheduler = BlockingScheduler()
+            scheduler.add_job(
+                self.send_email_with_pdf,
+                'date',
+                run_date=send_date.replace(hour=9, minute=0, second=0)
+            )
+            
+            self.logger.info(f"Email scheduled for {send_date}")
+            
+            try:
+                scheduler.start()
+            except KeyboardInterrupt:
+                self.logger.info("Scheduler stopped")
+                scheduler.shutdown()
+
+def main():
+    """Main function to run the automation"""
+    automation = VBApplicationAutomation()
+    
+    try:
+        # Run the automation
+        automation.run_automation()
+        
+        # Schedule email sending
+        automation.schedule_email_sending()
+        
+    except Exception as e:
+        logging.error(f"Automation failed: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

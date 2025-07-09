@@ -1,967 +1,256 @@
-import os
-import sys
-import time
-import logging
-import shutil
-import socket
-import subprocess
-import pandas as pd
-import win32gui
-import win32con
-import win32api
-import win32process
-import win32clipboard
-import pythoncom
-import schedule
-from datetime import datetime, timedelta
-from pathlib import Path
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.options import Options
-import win32com.client
-import psutil
-from apscheduler.schedulers.blocking import BlockingScheduler
-from apscheduler.triggers.cron import CronTrigger
-import requests
-import json
+VBS (Absons IT ERP) Automation Master Plan - UPDATED FOR BACKGROUND OPERATION
+================================================================================
 
-class VBApplicationAutomation:
-    def __init__(self, config_file="config.json"):
-        """Initialize the VB Application Automation system"""
-        self.config = self.load_config(config_file)
-        self.setup_logging()
-        self.app_process = None
-        self.app_window = None
-        self.excel_file_path = None
-        self.pdf_file_path = None
-        
-        # Application paths
-        self.shortcut_path = r"C:\Users\Lenovo\Music\moonflower\AbsonsItERP.exe - Shortcut.lnk"
-        self.network_path = r"\\192.168.10.16\e\ArabianLive\ArabianLive_MoonFlower\AbsonsItERP.exe"
-        
-        # Credentials
-        self.username = "Vj"
-        self.password = ""
-        
-        # Folders
-        self.output_folder = self.config.get("output_folder", "output")
-        self.excel_folder = self.config.get("excel_folder", "excel_files")
-        self.pdf_folder = self.config.get("pdf_folder", "pdf_reports")
-        
-        self.create_folders()
-        
-    def load_config(self, config_file):
-        """Load configuration from JSON file"""
-        try:
-            with open(config_file, 'r') as f:
-                return json.load(f)
-        except FileNotFoundError:
-            # Create default config
-            default_config = {
-                "output_folder": "output",
-                "excel_folder": "excel_files",
-                "pdf_folder": "pdf_reports",
-                "email_recipients": ["user@company.com"],
-                "email_subject": "Monthly WiFi Active Users Report",
-                "schedule_time": "09:00",
-                "network_ip": "192.168.10.16",
-                "network_port": 445
-            }
-            with open(config_file, 'w') as f:
-                json.dump(default_config, f, indent=4)
-            return default_config
-    
-    def setup_logging(self):
-        """Setup logging configuration"""
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.FileHandler('vb_automation.log'),
-                logging.StreamHandler()
-            ]
-        )
-        self.logger = logging.getLogger(__name__)
-    
-    def create_folders(self):
-        """Create necessary folders if they don't exist"""
-        folders = [self.output_folder, self.excel_folder, self.pdf_folder]
-        for folder in folders:
-            Path(folder).mkdir(parents=True, exist_ok=True)
-    
-    def check_network_connectivity(self):
-        """Check if network path is accessible"""
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(5)
-            result = sock.connect_ex((self.config["network_ip"], self.config["network_port"]))
-            sock.close()
-            return result == 0
-        except Exception as e:
-            self.logger.error(f"Network connectivity check failed: {e}")
-            return False
-    
-    def launch_application(self):
-        """Launch the VB application with fallback mechanism"""
-        app_launched = False
-        
-        # Try shortcut first
-        if os.path.exists(self.shortcut_path):
-            try:
-                self.logger.info("Attempting to launch via shortcut...")
-                self.app_process = subprocess.Popen([self.shortcut_path])
-                time.sleep(5)  # Wait for app to start
-                app_launched = True
-                self.logger.info("Application launched via shortcut successfully")
-            except Exception as e:
-                self.logger.warning(f"Shortcut launch failed: {e}")
-        
-        # Try network path if shortcut fails
-        if not app_launched and self.check_network_connectivity():
-            try:
-                self.logger.info("Attempting to launch via network path...")
-                self.app_process = subprocess.Popen([self.network_path])
-                time.sleep(5)  # Wait for app to start
-                app_launched = True
-                self.logger.info("Application launched via network path successfully")
-            except Exception as e:
-                self.logger.error(f"Network path launch failed: {e}")
-        
-        if not app_launched:
-            raise Exception("Failed to launch application via both shortcut and network path")
-        
-        # Find the application window
-        self.find_app_window()
-        
-    def find_app_window(self):
-        """Find the application window handle"""
-        def enum_windows_callback(hwnd, windows):
-            if win32gui.IsWindowVisible(hwnd):
-                window_title = win32gui.GetWindowText(hwnd)
-                if "AbsonsItERP" in window_title or "ERP" in window_title:
-                    windows.append(hwnd)
-            return True
-        
-        windows = []
-        win32gui.EnumWindows(enum_windows_callback, windows)
-        
-        if windows:
-            self.app_window = windows[0]
-            win32gui.SetForegroundWindow(self.app_window)
-            self.logger.info(f"Found application window: {self.app_window}")
-        else:
-            raise Exception("Could not find application window")
-    
-    def send_keys_to_window(self, keys, delay=0.1):
-        """Send keys to the application window"""
-        if self.app_window:
-            win32gui.SetForegroundWindow(self.app_window)
-            time.sleep(delay)
-            for key in keys:
-                if isinstance(key, str):
-                    win32api.keybd_event(ord(key.upper()), 0, 0, 0)
-                    win32api.keybd_event(ord(key.upper()), 0, win32con.KEYEVENTF_KEYUP, 0)
-                else:
-                    win32api.keybd_event(key, 0, 0, 0)
-                    win32api.keybd_event(key, 0, win32con.KEYEVENTF_KEYUP, 0)
-                time.sleep(delay)
-    
-    def login_to_application(self):
-        """Login to the VB application"""
-        self.logger.info("Logging into application...")
-        
-        # Set date to 01/01/2023 (assuming date field is first)
-        time.sleep(2)
-        self.send_keys_to_window("01/01/2023")
-        
-        # Tab to username field
-        win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(0.5)
-        
-        # Enter username
-        self.send_keys_to_window(self.username)
-        
-        # Tab to password field
-        win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(0.5)
-        
-        # Enter password (empty in this case)
-        if self.password:
-            self.send_keys_to_window(self.password)
-        
-        # Press Enter to login
-        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        
-        time.sleep(3)  # Wait for login to complete
-        self.logger.info("Login completed")
-    
-    def navigate_to_wifi_registration(self):
-        """Navigate to WiFi User Registration"""
-        self.logger.info("Navigating to WiFi User Registration...")
-        
-        # Click arrow icon (right arrow)
-        # This might need to be adjusted based on the actual UI
-        time.sleep(2)
-        
-        # Simulate clicking on Sales And Distribution
-        # Using keyboard navigation as it's more reliable
-        self.send_keys_to_window("s")  # First letter of Sales
-        time.sleep(1)
-        
-        # Press Enter to expand
-        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(1)
-        
-        # Navigate to POS
-        self.send_keys_to_window("p")  # First letter of POS
-        time.sleep(1)
-        
-        # Press Enter to expand
-        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(1)
-        
-        # Navigate to WiFi User Registration
-        self.send_keys_to_window("w")  # First letter of WiFi
-        time.sleep(1)
-        
-        # Press Enter to select
-        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(2)
-        
-        self.logger.info("Navigation to WiFi User Registration completed")
-    
-    def configure_import_settings(self):
-        """Configure import settings for Excel file"""
-        self.logger.info("Configuring import settings...")
-        
-        # Click "New" button (usually Alt+N)
-        win32api.keybd_event(win32con.VK_MENU, 0, 0, 0)  # Alt key down
-        win32api.keybd_event(ord('N'), 0, 0, 0)  # N key
-        win32api.keybd_event(ord('N'), 0, win32con.KEYEVENTF_KEYUP, 0)
-        win32api.keybd_event(win32con.VK_MENU, 0, win32con.KEYEVENTF_KEYUP, 0)  # Alt key up
-        time.sleep(2)
-        
-        # Click "Credit" radio button (using Tab navigation)
-        # This might need adjustment based on UI layout
-        for _ in range(5):  # Navigate to Credit radio button
-            win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
-            win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
-            time.sleep(0.3)
-        
-        # Press Space to select radio button
-        win32api.keybd_event(win32con.VK_SPACE, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_SPACE, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(1)
-        
-        # Navigate to and check "Import EHC Users Mac Address" checkbox
-        for _ in range(3):  # Navigate to checkbox
-            win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
-            win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
-            time.sleep(0.3)
-        
-        # Check the checkbox
-        win32api.keybd_event(win32con.VK_SPACE, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_SPACE, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(1)
-        
-        # Click "..." button to browse for file
-        win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(0.3)
-        
-        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(1)
-        
-        # Handle popup - click "Yes"
-        win32api.keybd_event(ord('Y'), 0, 0, 0)
-        win32api.keybd_event(ord('Y'), 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(1)
-        
-        self.logger.info("Import settings configured")
-    
-    def select_excel_file(self):
-        """Select the merged Excel file"""
-        self.logger.info("Selecting Excel file...")
-        
-        # Get the most recent Excel file from the excel folder
-        excel_files = list(Path(self.excel_folder).glob("*.xlsx"))
-        if not excel_files:
-            excel_files = list(Path(self.excel_folder).glob("*.xls"))
-        
-        if not excel_files:
-            raise Exception("No Excel files found in the excel folder")
-        
-        # Get the most recent file
-        self.excel_file_path = max(excel_files, key=os.path.getctime)
-        
-        # Type the file path
-        self.send_keys_to_window(str(self.excel_file_path))
-        
-        # Press Enter to select file
-        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(2)
-        
-        self.logger.info(f"Excel file selected: {self.excel_file_path}")
-    
-    def configure_sheet_and_table(self):
-        """Configure sheet and table settings"""
-        self.logger.info("Configuring sheet and table settings...")
-        
-        # Select "Sheet 1" from dropdown (assuming it's already selected or first option)
-        # Navigate to dropdown and select
-        win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(0.5)
-        
-        # Open dropdown
-        win32api.keybd_event(win32con.VK_DOWN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_DOWN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(0.5)
-        
-        # Select first option (Sheet 1)
-        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(1)
-        
-        # Navigate to table header dropdown
-        win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(0.5)
-        
-        # Select "EHC User Detail"
-        win32api.keybd_event(win32con.VK_DOWN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_DOWN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(0.5)
-        
-        # Find and select "EHC User Detail"
-        self.send_keys_to_window("EHC User Detail")
-        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(2)
-        
-        self.logger.info("Sheet and table settings configured")
-    
-    def wait_for_processing_and_update(self):
-        """Wait for data processing and handle popup"""
-        self.logger.info("Waiting for data processing...")
-        
-        # Wait for the application to process data
-        # This might take a while, so we'll wait and check periodically
-        max_wait_time = 300  # 5 minutes maximum
-        wait_interval = 10   # Check every 10 seconds
-        
-        for _ in range(max_wait_time // wait_interval):
-            time.sleep(wait_interval)
-            
-            # Check if popup appeared (this is application-specific)
-            # For now, we'll just wait for a reasonable amount of time
-            if self.check_for_popup():
-                break
-        
-        # Handle popup - click OK
-        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(2)
-        
-        # Click "Update" button
-        win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(0.5)
-        
-        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(3)
-        
-        self.logger.info("Data processing and update completed")
-    
-    def check_for_popup(self):
-        """Check if a popup window appeared"""
-        # This is a simplified check - in reality, you'd need to check for specific popup windows
-        return True  # Placeholder
-    
-    def navigate_to_reports(self):
-        """Navigate to WiFi Active Users Count report"""
-        self.logger.info("Navigating to reports...")
-        
-        # Close current window
-        win32api.keybd_event(win32con.VK_ESCAPE, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_ESCAPE, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(1)
-        
-        # Navigate to arrow icon again
-        # Click arrow icon, Sales And Distribution, Reports, POS, WiFi Active Users Count
-        self.send_keys_to_window("s")  # Sales And Distribution
-        time.sleep(1)
-        
-        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(1)
-        
-        # Navigate to Reports
-        self.send_keys_to_window("r")  # Reports
-        time.sleep(1)
-        
-        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(1)
-        
-        # Navigate to POS under Reports
-        self.send_keys_to_window("p")  # POS
-        time.sleep(1)
-        
-        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(1)
-        
-        # Navigate to WiFi Active Users Count
-        self.send_keys_to_window("w")  # WiFi Active Users Count
-        time.sleep(1)
-        
-        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(2)
-        
-        self.logger.info("Navigation to reports completed")
-    
-    def set_date_range_and_generate_report(self):
-        """Set date range and generate PDF report"""
-        self.logger.info("Setting date range and generating report...")
-        
-        # Get current date and first day of month
-        today = datetime.now()
-        first_day = today.replace(day=1)
-        
-        # Set start date (first day of month)
-        start_date = first_day.strftime("%d/%m/%Y")
-        end_date = today.strftime("%d/%m/%Y")
-        
-        # Enter start date
-        self.send_keys_to_window(start_date)
-        
-        # Tab to end date field
-        win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(0.5)
-        
-        # Enter end date
-        self.send_keys_to_window(end_date)
-        
-        # Click Print button
-        win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(0.5)
-        
-        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        
-        # Wait for report to load (this can take a long time)
-        self.logger.info("Waiting for report to load...")
-        time.sleep(30)  # Wait 30 seconds, adjust as needed
-        
-        # Click export button (second icon with download arrow)
-        # This might need to be adjusted based on the actual UI
-        win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(0.5)
-        
-        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(2)
-        
-        # Select "Acrobat format(pdf)" from dropdown
-        self.send_keys_to_window("Acrobat format(pdf)")
-        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(1)
-        
-        # Click OK
-        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(2)
-        
-        # Save PDF with correct name
-        pdf_name = f"Moon Flower Active Users_{today.strftime('%d%m%Y')}.pdf"
-        self.pdf_file_path = os.path.join(self.pdf_folder, pdf_name)
-        
-        self.send_keys_to_window(self.pdf_file_path)
-        win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(5)
-        
-        self.logger.info(f"PDF report generated: {self.pdf_file_path}")
-    
-    def close_application(self):
-        """Close the VB application"""
-        self.logger.info("Closing application...")
-        
-        if self.app_window:
-            win32gui.PostMessage(self.app_window, win32con.WM_CLOSE, 0, 0)
-        
-        if self.app_process:
-            try:
-                self.app_process.terminate()
-                self.app_process.wait(timeout=10)
-            except:
-                self.app_process.kill()
-        
-        self.logger.info("Application closed")
-    
-    def send_email_with_pdf(self):
-        """Send email with PDF attachment using Outlook"""
-        self.logger.info("Sending email with PDF attachment...")
-        
-        try:
-            # Initialize Outlook
-            outlook = win32com.client.Dispatch("Outlook.Application")
-            mail = outlook.CreateItem(0)  # 0 = olMailItem
-            
-            # Set email properties
-            mail.To = ";".join(self.config["email_recipients"])
-            mail.Subject = self.config["email_subject"]
-            
-            # Email body with signature
-            today = datetime.now().strftime("%B %d, %Y")
-            mail.Body = f"""
-Dear Team,
+## OVERVIEW
+Complete automation system for VBS (Absons IT ERP) software to:
+- Launch application and handle security popups
+- Login with precise form filling (Company: IT, Financial Year: 01/01/2023, Login ID: vj, Password: empty)
+- Navigate to WiFi User Registration section
+- Import Excel files and generate PDF reports
+- Email notifications with attachments
+- **NEW: Background operation with immunity for other applications**
 
-Please find attached the monthly WiFi Active Users report for {today}.
+## PHASE 1: APPLICATION LAUNCH & LOGIN (BACKGROUND OPERATION)
+================================================================================
 
-This report contains the count of active WiFi users for the current month.
+### CRITICAL REQUIREMENTS:
+1. **Form Field Order** (as per user specification):
+   - Cursor starts at Password field by default
+   - Navigate UP to Company dropdown → Fill "IT"
+   - Move to Financial Year dropdown → Fill "01/01/2023" 
+   - Move to Login ID field → Fill "vj"
+   - Password field → Leave EMPTY
+   - Click OK button (with O underlined)
 
-Best regards,
-Automated Reporting System
-Moon Flower IT Department
-            """
-            
-            # Add PDF attachment
-            if self.pdf_file_path and os.path.exists(self.pdf_file_path):
-                mail.Attachments.Add(self.pdf_file_path)
-            
-            # Send email
-            mail.Send()
-            
-            self.logger.info("Email sent successfully")
-            
-        except Exception as e:
-            self.logger.error(f"Failed to send email: {e}")
-            raise
-    
-    def run_automation(self):
-        """Run the complete automation process"""
-        try:
-            self.logger.info("Starting VB Application Automation...")
-            
-            # Step 1: Launch application
-            self.launch_application()
-            
-            # Step 2: Login
-            self.login_to_application()
-            
-            # Step 3: Navigate to WiFi User Registration
-            self.navigate_to_wifi_registration()
-            
-            # Step 4: Configure import settings
-            self.configure_import_settings()
-            
-            # Step 5: Select Excel file
-            self.select_excel_file()
-            
-            # Step 6: Configure sheet and table
-            self.configure_sheet_and_table()
-            
-            # Step 7: Wait for processing and update
-            self.wait_for_processing_and_update()
-            
-            # Step 8: Navigate to reports
-            self.navigate_to_reports()
-            
-            # Step 9: Generate PDF report
-            self.set_date_range_and_generate_report()
-            
-            # Step 10: Close application
-            self.close_application()
-            
-            self.logger.info("Automation completed successfully")
-            
-        except Exception as e:
-            self.logger.error(f"Automation failed: {e}")
-            self.close_application()
-            raise
-    
-    def schedule_email_sending(self):
-        """Schedule email sending for the day after PDF generation"""
-        if self.pdf_file_path and os.path.exists(self.pdf_file_path):
-            # Get PDF creation date
-            pdf_creation_time = datetime.fromtimestamp(os.path.getctime(self.pdf_file_path))
-            
-            # Schedule email for the next day
-            send_date = pdf_creation_time + timedelta(days=1)
-            
-            # If PDF was created on Friday, email will be sent on Saturday
-            scheduler = BlockingScheduler()
-            scheduler.add_job(
-                self.send_email_with_pdf,
-                'date',
-                run_date=send_date.replace(hour=9, minute=0, second=0)
-            )
-            
-            self.logger.info(f"Email scheduled for {send_date}")
-            
-            try:
-                scheduler.start()
-            except KeyboardInterrupt:
-                self.logger.info("Scheduler stopped")
-                scheduler.shutdown()
+2. **Background Operation Requirements**:
+   - Use direct Windows API calls (SendMessage/PostMessage)
+   - Target only VBS window handle - no global input simulation
+   - Prevent interference with other applications
+   - No pyautogui global clicks/typing - only direct window messaging
+   - Ensure other applications remain immune to automation
 
-def main():
-    """Main function to run the automation"""
-    automation = VBApplicationAutomation()
-    
-    try:
-        # Run the automation
-        automation.run_automation()
-        
-        # Schedule email sending
-        automation.schedule_email_sending()
-        
-    except Exception as e:
-        logging.error(f"Automation failed: {e}")
-        sys.exit(1)
+3. **Form State Handling**:
+   - Detect and handle LoginEmpty.png scenario (rdsr in field)
+   - Prevent form shrinking by proper timing and window management
+   - Restart application if form becomes inaccessible
+   - Wait for complete form stabilization before interaction
 
-if __name__ == "__main__":
-    main()
-    // tasks list.
+### IMPLEMENTATION STRATEGY:
 
-    # VB Application Automation - Detailed Tasks List
+#### A. Window-Specific Automation (35 Years Experience Approach):
+```
+1. Get VBS window handle using FindWindow/EnumWindows
+2. Use GetWindowThreadProcessId to ensure we target correct process
+3. Use SendMessage/PostMessage for ALL input (no global simulation)
+4. Implement proper window focus without affecting other applications
+5. Use GetDlgItem or similar to identify form controls
+6. Direct control messaging instead of coordinate-based clicking
+```
 
-## Phase 1: Environment Setup & Prerequisites
+#### B. Robust Form Navigation:
+```
+1. Detect current cursor position (password field)
+2. Use WM_KEYDOWN with VK_TAB + SHIFT to navigate backwards:
+   - Shift+Tab → Login ID field
+   - Shift+Tab → Financial Year dropdown  
+   - Shift+Tab → Company dropdown
+3. Fill each field using WM_SETTEXT or WM_CHAR messages
+4. Navigate forward using VK_TAB to next field
+5. Verify field contents before proceeding
+```
 
-### 1.1 Python Environment Setup
-- [ ] Install Python 3.8+ (recommended 3.9 or higher)
-- [ ] Create virtual environment: `python -m venv vb_automation_env`
-- [ ] Activate virtual environment: `vb_automation_env\Scripts\activate`
-- [ ] Install required packages:
-  ```bash
-  pip install pywin32
-  pip install selenium
-  pip install pandas
-  pip install openpyxl
-  pip install xlwt
-  pip install schedule
-  pip install requests
-  pip install psutil
-  pip install apscheduler
-  pip install pythoncom
-  ```
+#### C. Background Security Popup Handling:
+```
+1. Monitor for security dialogs using EnumWindows in separate thread
+2. Use direct window messaging to handle popups (Alt+R, Enter)
+3. No global keyboard simulation - only targeted window messages
+4. Ensure popup handling doesn't affect other applications
+```
 
-### 1.2 Windows Dependencies
-- [ ] Install Chrome browser (latest version)
-- [ ] Download ChromeDriver matching your Chrome version
-- [ ] Place ChromeDriver in PATH or project folder
-- [ ] Ensure Microsoft Office/Outlook is installed
-- [ ] Test Outlook COM automation access
+#### D. Form Shrinking Prevention:
+```
+1. Detect window size/position changes
+2. Restore window to proper size if shrinking detected
+3. Implement timing delays based on application response
+4. Use window state monitoring to detect readiness
+```
 
-### 1.3 Network & File System Setup
-- [ ] Test network connectivity to `\\192.168.10.16`
-- [ ] Verify access to `\\192.168.10.16\e\ArabianLive\ArabianLive_MoonFlower\AbsonsItERP.exe`
-- [ ] Test shortcut at `C:\Users\Lenovo\Music\moonflower\AbsonsItERP.exe - Shortcut.lnk`
-- [ ] Create project directory structure:
-  ```
-  vb_automation/
-  ├── main.py
-  ├── config.json
-  ├── requirements.txt
-  ├── logs/
-  ├── excel_files/
-  ├── pdf_reports/
-  └── output/
-  ```
+### TASKS FOR PHASE 1:
 
-## Phase 2: Core Application Development
+**Task 1.1: Background Window Management**
+- Implement window-specific automation using Windows API
+- Create window handle management system
+- Implement immunity for other applications
 
-### 2.1 Application Launch Module
-- [ ] Implement `launch_application()` method
-- [ ] Add shortcut path validation
-- [ ] Add network path fallback mechanism
-- [ ] Implement process monitoring
-- [ ] Add window detection using Win32 API
-- [ ] Test with both shortcut and network paths
+**Task 1.2: Accurate Form Field Navigation** 
+- Map exact form field sequence (Password → Login ID → Financial Year → Company)
+- Implement Shift+Tab navigation for backward movement
+- Create field-specific input methods using direct messaging
 
-### 2.2 Window Management & UI Automation
-- [ ] Implement `find_app_window()` method
-- [ ] Add window focus management
-- [ ] Implement `send_keys_to_window()` method
-- [ ] Add keyboard input simulation
-- [ ] Implement mouse click simulation (if needed)
-- [ ] Test UI element detection and interaction
+**Task 1.3: Robust Login Sequence**
+- Handle LoginEmpty scenario with rdsr replacement
+- Implement form state detection and recovery
+- Create application restart mechanism for corrupted forms
 
-### 2.3 Authentication Module
-- [ ] Implement `login_to_application()` method
-- [ ] Add date field handling (01/01/2023)
-- [ ] Implement username input ("Vj")
-- [ ] Handle empty password field
-- [ ] Add login success verification
-- [ ] Implement retry mechanism for failed logins
+**Task 1.4: Security Popup Background Handling**
+- Background thread for popup monitoring
+- Direct window messaging for popup interaction
+- No interference with user's other activities
 
-### 2.4 Navigation System
-- [ ] Implement `navigate_to_wifi_registration()` method
-- [ ] Add menu navigation (Sales And Distribution → POS → WiFi User Registration)
-- [ ] Implement keyboard shortcuts and hotkeys
-- [ ] Add navigation state verification
-- [ ] Implement `navigate_to_reports()` method
-- [ ] Add Reports → POS → WiFi Active Users Count navigation
+## PHASE 2: NAVIGATION (BACKGROUND OPERATION)
+================================================================================
 
-## Phase 3: Data Processing & Import
+### REQUIREMENTS:
+- Navigate to WiFi User Registration using direct window messaging
+- Use window-specific automation only
+- Maintain immunity for other applications
 
-### 3.1 Excel File Management
-- [ ] Implement Excel file selection logic
-- [ ] Add file validation (format, content)
-- [ ] Implement `select_excel_file()` method
-- [ ] Add error handling for corrupted files
-- [ ] Test with different Excel formats (.xlsx, .xls)
+### IMPLEMENTATION:
+- Use menu navigation via WM_COMMAND messages
+- Direct control identification and interaction
+- Background thread for navigation monitoring
 
-### 3.2 Import Configuration
-- [ ] Implement `configure_import_settings()` method
-- [ ] Add "New" button clicking
-- [ ] Implement "Credit" radio button selection
-- [ ] Add "Import EHC Users Mac Address" checkbox handling
-- [ ] Implement "..." button clicking for file browser
-- [ ] Add popup handling ("Yes" confirmation)
+## PHASE 3: EXCEL IMPORT (BACKGROUND OPERATION)
+================================================================================
 
-### 3.3 Sheet & Table Configuration
-- [ ] Implement `configure_sheet_and_table()` method
-- [ ] Add "Sheet 1" dropdown selection
-- [ ] Implement "EHC User Detail" table header selection
-- [ ] Add data validation checks
-- [ ] Implement processing wait mechanism
+### REQUIREMENTS:
+- Import Excel files using background automation
+- File dialog handling via direct window messaging
+- No global file system simulation
 
-### 3.4 Data Processing & Update
-- [ ] Implement `wait_for_processing_and_update()` method
-- [ ] Add progress monitoring
-- [ ] Implement popup detection and handling
-- [ ] Add "Update" button clicking
-- [ ] Implement success/failure verification
+### IMPLEMENTATION:
+- Use GetOpenFileName API for file selection
+- Direct dialog control messaging
+- Background file processing
 
-## Phase 4: Report Generation
+## PHASE 4: PDF GENERATION (BACKGROUND OPERATION)
+================================================================================
 
-### 4.1 Date Range Configuration
-- [ ] Implement `set_date_range_and_generate_report()` method
-- [ ] Add first day of month calculation
-- [ ] Implement current date calculation
-- [ ] Add date input field handling
-- [ ] Test date format validation
+### REQUIREMENTS:
+- Generate PDF reports using background automation
+- Print dialog handling via direct messaging
+- No interference with user's printer settings
 
-### 4.2 Report Generation
-- [ ] Implement "Print" button clicking
-- [ ] Add long loading time handling (30+ seconds)
-- [ ] Implement progress monitoring
-- [ ] Add export button detection and clicking
-- [ ] Implement PDF format selection
+### IMPLEMENTATION:
+- Use print API calls directly
+- Background PDF generation monitoring
+- Direct printer dialog control
 
-### 4.3 PDF Export & Saving
-- [ ] Implement "Acrobat format(pdf)" selection
-- [ ] Add file save dialog handling
-- [ ] Implement proper file naming: `Moon Flower Active Users_DDMMYYYY.pdf`
-- [ ] Add file save location management
-- [ ] Implement save success verification
+## TECHNICAL ARCHITECTURE FOR BACKGROUND OPERATION
+================================================================================
 
-## Phase 5: Email Integration
+### Core Components:
 
-### 5.1 Outlook Integration
-- [ ] Implement `send_email_with_pdf()` method
-- [ ] Add Outlook COM object initialization
-- [ ] Implement email composition
-- [ ] Add recipient management from config
-- [ ] Implement email subject and body formatting
+1. **WindowManager**: 
+   - Manages VBS window handles
+   - Ensures target-specific automation
+   - Provides immunity for other applications
 
-### 5.2 Email Scheduling
-- [ ] Implement `schedule_email_sending()` method
-- [ ] Add PDF creation date detection
-- [ ] Implement next-day scheduling logic
-- [ ] Add weekend handling (Friday → Saturday)
-- [ ] Test scheduling with APScheduler
+2. **DirectInputHandler**:
+   - Replaces pyautogui with direct Windows API calls
+   - SendMessage/PostMessage for all input
+   - Window-specific keyboard/mouse simulation
 
-### 5.3 Email Content & Attachments
-- [ ] Create professional email template
-- [ ] Add company signature
-- [ ] Implement PDF attachment handling
-- [ ] Add attachment validation
-- [ ] Test email delivery
+3. **FormController**:
+   - Maps form controls using window hierarchy
+   - Provides direct control access methods
+   - Handles form state management
 
-## Phase 6: Error Handling & Logging
+4. **BackgroundMonitor**:
+   - Monitors VBS application state in background thread
+   - Handles security popups without user interference
+   - Maintains automation state awareness
 
-### 6.1 Comprehensive Error Handling
-- [ ] Add try-catch blocks for all critical operations
-- [ ] Implement application crash recovery
-- [ ] Add network connectivity error handling
-- [ ] Implement file access error handling
-- [ ] Add UI automation error handling
+### API Calls to Implement:
 
-### 6.2 Logging System
-- [ ] Implement comprehensive logging
-- [ ] Add log file rotation
-- [ ] Implement different log levels (INFO, WARNING, ERROR)
-- [ ] Add performance monitoring
-- [ ] Implement audit trail
+```python
+# Core Windows API calls for background automation:
+- FindWindow/FindWindowEx: Locate specific controls
+- SendMessage/PostMessage: Direct window messaging  
+- GetWindowThreadProcessId: Process-specific targeting
+- SetWindowPos: Window management without global focus
+- GetDlgItem: Direct control access
+- WM_SETTEXT: Direct text input to controls
+- WM_COMMAND: Menu and button activation
+- WM_KEYDOWN/WM_KEYUP: Targeted keyboard input
+- WM_LBUTTONDOWN/WM_LBUTTONUP: Targeted mouse input
+```
 
-### 6.3 Recovery Mechanisms
-- [ ] Add application restart capability
-- [ ] Implement partial process recovery
-- [ ] Add data backup mechanisms
-- [ ] Implement rollback procedures
+## IMMUNITY STRATEGY FOR OTHER APPLICATIONS
+================================================================================
 
-## Phase 7: Configuration & Scheduling
+### Protection Mechanisms:
 
-### 7.1 Configuration Management
-- [ ] Create `config.json` file
-- [ ] Add all configurable parameters
-- [ ] Implement configuration validation
-- [ ] Add configuration update mechanism
-- [ ] Test configuration changes
+1. **Process Isolation**:
+   - Target only VBS process ID
+   - Verify window ownership before any action
+   - Use process-specific window enumeration
 
-### 7.2 Windows Service Integration
-- [ ] Create Windows service wrapper
-- [ ] Add service installation script
-- [ ] Implement service start/stop/restart
-- [ ] Add service monitoring
-- [ ] Test service reliability
+2. **Handle Validation**:
+   - Validate window handles before each operation
+   - Ensure handles belong to VBS process
+   - Implement handle expiration and refresh
 
-### 7.3 Task Scheduling
-- [ ] Implement daily/weekly scheduling
-- [ ] Add Windows Task Scheduler integration
-- [ ] Create backup scheduling mechanisms
-- [ ] Add scheduling conflict resolution
-- [ ] Test scheduled execution
+3. **No Global Input Simulation**:
+   - Eliminate pyautogui usage completely
+   - Use only direct window messaging
+   - No global cursor movement or keyboard simulation
 
-## Phase 8: Testing & Validation
+4. **Background Thread Operation**:
+   - Run automation in separate thread
+   - Monitor without blocking main UI thread
+   - Maintain responsiveness for other applications
 
-### 8.1 Unit Testing
-- [ ] Test individual methods
-- [ ] Test error conditions
-- [ ] Test edge cases
-- [ ] Test with different data sets
-- [ ] Test network failure scenarios
+## TESTING STRATEGY
+================================================================================
 
-### 8.2 Integration Testing
-- [ ] Test complete workflow
-- [ ] Test with actual VB application
-- [ ] Test email delivery
-- [ ] Test scheduling functionality
-- [ ] Test error recovery
+### Verification Points:
 
-### 8.3 Performance Testing
-- [ ] Test with large Excel files
-- [ ] Test long-running operations
-- [ ] Test memory usage
-- [ ] Test CPU utilization
-- [ ] Test network bandwidth usage
+1. **Immunity Testing**:
+   - Run automation while using other applications
+   - Verify no interference with typing in other apps
+   - Test mouse clicking immunity in other windows
 
-## Phase 9: Documentation & Deployment
+2. **Accuracy Testing**:
+   - Verify exact form field sequence navigation
+   - Test LoginEmpty scenario handling
+   - Validate form shrinking prevention
 
-### 9.1 Documentation
-- [ ] Create user manual
-- [ ] Create technical documentation
-- [ ] Create troubleshooting guide
-- [ ] Create configuration guide
-- [ ] Create maintenance procedures
+3. **Background Operation Testing**:
+   - Test automation while VBS is minimized
+   - Verify operation without stealing focus
+   - Test multi-application environment
 
-### 9.2 Deployment
-- [ ] Create deployment package
-- [ ] Create installation script
-- [ ] Test deployment on target machine
-- [ ] Create backup procedures
-- [ ] Implement monitoring
+## SUCCESS CRITERIA
+================================================================================
 
-### 9.3 Maintenance
-- [ ] Create update mechanism
-- [ ] Add version control
-- [ ] Implement health checks
-- [ ] Add performance monitoring
-- [ ] Create maintenance schedule
+### Phase 1 Complete When:
+- ✅ VBS launches and handles security popups in background
+- ✅ Form navigation follows exact sequence (Password → Login ID → Financial Year → Company)
+- ✅ Login completes successfully with correct credentials
+- ✅ Other applications remain completely immune to automation
+- ✅ No global input simulation used anywhere
+- ✅ Form shrinking prevented and handled properly
+- ✅ LoginEmpty scenario detected and corrected
+- ✅ Application restart works when form corrupted
 
-## Phase 10: Advanced Features (Optional)
+### Overall Success Criteria:
+- Complete automation runs in background without user awareness
+- No interference with user's other activities
+- Robust handling of all edge cases and form states
+- 100% reliable login success rate
+- Professional-grade automation suitable for production environment
 
-### 10.1 Web Interface
-- [ ] Create web-based configuration interface
-- [ ] Add status monitoring dashboard
-- [ ] Implement remote control capabilities
-- [ ] Add reporting dashboard
+## NEXT STEPS
+================================================================================
 
-### 10.2 Database Integration
-- [ ] Add database logging
-- [ ] Implement data analytics
-- [ ] Add historical reporting
-- [ ] Create data export features
+1. **Immediate Priority**: Implement background WindowManager and DirectInputHandler
+2. **Phase 1 Focus**: Perfect the login sequence with background operation
+3. **Testing**: Verify immunity for other applications
+4. **Progression**: Only move to Phase 2 after Phase 1 is bulletproof
 
-### 10.3 Multi-user Support
-- [ ] Add user management
-- [ ] Implement role-based access
-- [ ] Add audit logging
-- [ ] Create user preferences
-
-## Critical Implementation Notes
-
-### Priority Order
-1. **Phase 1-2**: Essential foundation
-2. **Phase 3**: Core functionality
-3. **Phase 4**: Report generation
-4. **Phase 5**: Email integration
-5. **Phase 6**: Error handling
-6. **Phase 7**: Production deployment
-7. **Phase 8**: Testing & validation
-8. **Phase 9**: Documentation
-9. **Phase 10**: Advanced features
-
-### Key Challenges to Address
-- [ ] VB application UI changes or updates
-- [ ] Network connectivity issues
-- [ ] Windows security restrictions
-- [ ] Timing issues with UI automation
-- [ ] Memory leaks in long-running processes
-
-### Success Criteria
-- [ ] 99% successful automation runs
-- [ ] < 5 minutes total execution time
-- [ ] Reliable email delivery
-- [ ] Proper error reporting
-- [ ] Easy maintenance and updates
-
-### Testing Checklist
-- [ ] Test on different Windows versions
-- [ ] Test with different user permissions
-- [ ] Test with VB application updates
-- [ ] Test network failure scenarios
-- [ ] Test large file handling
-- [ ] Test extended operation periods
-
-## Resources & Support Files Needed
-
-### Configuration Files
-- [ ] `config.json` - Main configuration
-- [ ] `requirements.txt` - Python dependencies
-- [ ] `install.bat` - Installation script
-- [ ] `run.bat` - Execution script
-
-### Support Files
-- [ ] Email templates
-- [ ] Logging configuration
-- [ ] Service installation scripts
-- [ ] Backup and recovery scripts
-- [ ] Monitoring scripts
-
-### Documentation Files
-- [ ] README.txt
-- [ ] INSTALLATION.txt
-- [ ] TROUBLESHOOTING.txt
-- [ ] CONFIGURATION.txt
-- [ ] CHANGELOG.txt
+This plan reflects 35 years of automation engineering experience with focus on:
+- Production-ready reliability
+- User experience protection  
+- Professional background operation
+- Robust error handling and recovery

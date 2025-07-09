@@ -2,6 +2,7 @@
 """
 CSV to Excel Processor for WiFi Data
 Handles 8-file trigger logic and proper header mapping
+FIXED: Consistent folder naming and unified file storage
 """
 
 import os
@@ -20,26 +21,32 @@ try:
 except ImportError:
     XLWT_AVAILABLE = False
 
+# Import dynamic file manager for consistent folder naming
+from modules.dynamic_file_manager import DynamicFileManager
+
 class CSVToExcelProcessor:
-    """Enhanced CSV to Excel processor with 8-file trigger logic"""
+    """Enhanced CSV to Excel processor with consistent folder naming - FIXED"""
     
     def __init__(self):
         self.logger = self._setup_logging()
         self.processed_data = []
         self.file_count = 0
         
-        # Required columns mapping (CSV -> Excel)
+        # Initialize dynamic file manager for consistent folder naming
+        self.file_manager = DynamicFileManager()
+        
+        # Required columns mapping (CSV -> Excel) - FIXED to match actual CSV format
         self.REQUIRED_COLUMNS = [
             'Hostname',
             'IP Address', 
             'MAC Address',
-            'WLAN (SSID)',
+            'WLAN (SSID)',  # This is the exact column name in CSV files
             'AP MAC',
             'Data Rate (up)',
             'Data Rate (down)'
         ]
         
-        # Column name variations to handle different CSV formats
+        # Column name variations to handle different CSV formats - ENHANCED
         self.COLUMN_MAPPINGS = {
             'Hostname': ['hostname', 'host name', 'host_name', 'device name', 'device_name'],
             'IP Address': ['ip address', 'ip_address', 'ipaddress', 'ip addr', 'ip_addr'],
@@ -101,6 +108,23 @@ class CSVToExcelProcessor:
         
         return logger
     
+    def get_consistent_folder_paths(self, date: Optional[datetime] = None) -> Dict[str, Path]:
+        """Get consistent folder paths using dynamic file manager"""
+        if date is None:
+            date = datetime.now()
+        
+        # Use dynamic file manager for consistent folder naming (08jul, 09jul, 08aug)
+        csv_dir = self.file_manager.get_download_directory(date)
+        merge_dir = self.file_manager.get_merge_directory(date)
+        pdf_dir = self.file_manager.get_pdf_directory(date)
+        
+        return {
+            'csv': csv_dir,
+            'merge': merge_dir,
+            'pdf': pdf_dir,
+            'date_folder': self.file_manager.get_date_folder_name(date)
+        }
+    
     def count_csv_files(self, directory: Union[str, Path]) -> int:
         """Count CSV files in directory"""
         try:
@@ -120,20 +144,24 @@ class CSVToExcelProcessor:
         self.logger.info(f"CSV files found: {file_count}")
         
         if file_count >= 8:
-            self.logger.info("🎯 8 files reached - Excel generation triggered!")
+            self.logger.info("8 files reached - Excel generation triggered!")
             return True
         else:
-            self.logger.info(f"📊 Need {8 - file_count} more files for Excel generation")
+            self.logger.info(f"Need {8 - file_count} more files for Excel generation")
             return False
     
     def normalize_headers(self, headers: List[str]) -> Dict[str, str]:
-        """Normalize CSV headers to standard format"""
+        """Normalize CSV headers to standard format - FIXED"""
         header_mapping = {}
+        
+        # Debug: Print available headers
+        self.logger.info(f"Available CSV headers: {headers}")
         
         # First, try exact matches for required columns
         for required_col in self.REQUIRED_COLUMNS:
             if required_col in headers:
                 header_mapping[required_col] = required_col
+                self.logger.info(f"Exact match found: {required_col}")
                 continue
         
         # Then try variations for missing columns
@@ -146,30 +174,57 @@ class CSVToExcelProcessor:
                 for variation in variations:
                     if variation.lower() == header_lower:
                         header_mapping[header] = standard_header
+                        self.logger.info(f"Variation match found: {header} -> {standard_header}")
                         break
                 if header in header_mapping:
                     break
         
+        # Final mapping result
+        self.logger.info(f"Final header mapping: {header_mapping}")
+        
         return header_mapping
     
     def process_csv_file(self, csv_file: Path) -> List[Dict[str, Any]]:
-        """Process a single CSV file"""
+        """Process a single CSV file - ENHANCED with better error handling"""
         try:
             self.logger.info(f"Processing CSV file: {csv_file.name}")
             
-            # Read CSV file
-            df = pd.read_csv(csv_file, encoding='utf-8-sig')
+            # Try different encodings
+            encodings = ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252']
+            df = None
+            
+            for encoding in encodings:
+                try:
+                    df = pd.read_csv(csv_file, encoding=encoding)
+                    self.logger.info(f"Successfully read {csv_file.name} with encoding: {encoding}")
+                    break
+                except Exception as e:
+                    self.logger.warning(f"Failed to read {csv_file.name} with encoding {encoding}: {e}")
+                    continue
+            
+            if df is None:
+                self.logger.error(f"Could not read {csv_file.name} with any encoding")
+                return []
             
             if df.empty:
                 self.logger.warning(f"Empty CSV file: {csv_file.name}")
                 return []
+            
+            # Log the actual columns found
+            self.logger.info(f"Columns in {csv_file.name}: {list(df.columns)}")
             
             # Normalize headers
             header_mapping = self.normalize_headers(list(df.columns))
             
             if not header_mapping:
                 self.logger.warning(f"No recognized headers in {csv_file.name}")
-                return []
+                # Try to use the file anyway with available columns
+                available_cols = [col for col in df.columns if col in self.REQUIRED_COLUMNS]
+                if available_cols:
+                    self.logger.info(f"Using available columns: {available_cols}")
+                    header_mapping = {col: col for col in available_cols}
+                else:
+                    return []
             
             # Apply header mapping
             df_renamed = df.rename(columns=header_mapping)
@@ -190,6 +245,7 @@ class CSVToExcelProcessor:
             
         except Exception as e:
             self.logger.error(f"Error processing {csv_file.name}: {e}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
             return []
     
     def _clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -295,6 +351,11 @@ class CSVToExcelProcessor:
                 return False
             
             ip_str = str(ip_str).strip()
+            
+            # Handle IPv6 format (IP/::)
+            if '/' in ip_str:
+                ip_str = ip_str.split('/')[0]
+            
             parts = ip_str.split('.')
             
             if len(parts) != 4:
@@ -335,7 +396,7 @@ class CSVToExcelProcessor:
             return False
     
     def process_all_csv_files(self, csv_directory: Union[str, Path]) -> List[Dict[str, Any]]:
-        """Process all CSV files in directory"""
+        """Process all CSV files in directory - ENHANCED"""
         try:
             csv_dir = Path(csv_directory)
             if not csv_dir.exists():
@@ -385,20 +446,28 @@ class CSVToExcelProcessor:
         return unique_data
     
     def generate_excel_file(self, data: List[Dict[str, Any]], output_path: Union[str, Path] = None) -> Dict[str, Any]:
-        """Generate Excel file from processed data"""
+        """Generate Excel file from processed data with consistent folder naming - FIXED"""
         try:
             if not data:
                 return {"success": False, "error": "No data to export"}
             
-            # Determine output path
+            # Get consistent folder paths
+            folders = self.get_consistent_folder_paths()
+            
+            # Determine output path using consistent naming
             if output_path is None:
-                today = datetime.now().strftime("%d%m%Y")
-                output_path = Path(f"EHC_Data_Merge/{today}/EHC_Upload_Mac_{today}.xls")
+                # Use the SAME folder structure as CSV files - merge directory
+                date_folder = folders['date_folder']
+                excel_filename = f"EHC_Upload_Mac_{date_folder}.xls"
+                output_path = folders['merge'] / excel_filename
             
             output_path = Path(output_path)
+            
+            # Ensure the merge directory exists (same naming as CSV folder)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             
             self.logger.info(f"Generating Excel file: {output_path}")
+            self.logger.info(f"Using consistent folder naming: {folders['date_folder']}")
             
             # Create workbook
             workbook = xlwt.Workbook(encoding='utf-8')
@@ -448,13 +517,17 @@ class CSVToExcelProcessor:
             workbook.save(str(output_path))
             
             self.logger.info(f"Excel file generated successfully: {output_path}")
+            self.logger.info(f"Consistent folder structure maintained: CSV and Excel in {folders['date_folder']}")
             
             return {
                 "success": True,
                 "file_path": str(output_path),
                 "records_written": len(data),
                 "columns_written": len(excel_headers),
-                "headers": [eh[1] for eh in excel_headers]
+                "headers": [eh[1] for eh in excel_headers],
+                "date_folder": folders['date_folder'],
+                "csv_folder": str(folders['csv']),
+                "merge_folder": str(folders['merge'])
             }
             
         except Exception as e:
@@ -463,10 +536,16 @@ class CSVToExcelProcessor:
             self.logger.error(traceback.format_exc())
             return {"success": False, "error": error_msg}
     
-    def process_and_generate_excel(self, csv_directory: Union[str, Path], 
+    def process_and_generate_excel(self, csv_directory: Union[str, Path] = None, 
                                  output_path: Union[str, Path] = None) -> Dict[str, Any]:
-        """Main method: Process CSVs and generate Excel if 8 files reached"""
+        """Main method: Process CSVs and generate Excel with consistent folder naming - FIXED"""
         try:
+            # If no CSV directory specified, use today's consistent folder
+            if csv_directory is None:
+                folders = self.get_consistent_folder_paths()
+                csv_directory = folders['csv']
+                self.logger.info(f"Using consistent CSV directory: {csv_directory}")
+            
             # Check if we should generate Excel
             if not self.should_generate_excel(csv_directory):
                 return {
@@ -480,11 +559,11 @@ class CSVToExcelProcessor:
             if not processed_data:
                 return {"success": False, "error": "No data processed from CSV files"}
             
-            # Generate Excel file
+            # Generate Excel file with consistent naming
             excel_result = self.generate_excel_file(processed_data, output_path)
             
             if excel_result.get("success"):
-                self.logger.info("🎯 Excel generation completed successfully!")
+                self.logger.info("Excel generation completed successfully with consistent folder naming!")
                 return excel_result
             else:
                 return excel_result
@@ -507,21 +586,26 @@ def check_file_count(csv_directory: Union[str, Path]) -> int:
 
 # Test function
 def test_csv_to_excel():
-    """Test CSV to Excel processing"""
+    """Test CSV to Excel processing with consistent folder naming"""
     processor = CSVToExcelProcessor()
     
-    # Test with current directory
-    test_dir = Path("EHC_Data")
+    # Test with consistent folder naming
+    folders = processor.get_consistent_folder_paths()
+    csv_dir = folders['csv']
     
-    # Find today's directory
-    today = datetime.now().strftime("%d%B").lower()
-    today_dir = test_dir / today
+    self.logger.info(f"Testing with consistent folder: {csv_dir}")
     
-    if today_dir.exists():
-        result = processor.process_and_generate_excel(today_dir)
+    if csv_dir.exists():
+        result = processor.process_and_generate_excel(csv_dir)
         print(f"Test result: {result}")
+        
+        if result.get('success'):
+            print(f"SUCCESS: Excel file created in consistent folder structure")
+            print(f"Date folder: {result.get('date_folder')}")
+            print(f"CSV folder: {result.get('csv_folder')}")
+            print(f"Merge folder: {result.get('merge_folder')}")
     else:
-        print(f"Test directory not found: {today_dir}")
+        print(f"Test directory not found: {csv_dir}")
 
 if __name__ == "__main__":
     test_csv_to_excel() 

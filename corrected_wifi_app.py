@@ -2,6 +2,7 @@
 """
 Corrected WiFi App - Robust and Efficient Version
 Combines best timing from login fix.txt with efficient selectors
+FIXED: Consistent folder naming (08jul, 09jul, 08aug)
 """
 
 import sys
@@ -31,17 +32,17 @@ USERNAME = "admin"
 PASSWORD = "AdminFlower@123"
 
 class CorrectedWiFiApp:
-    """Robust and efficient WiFi automation app"""
+    """Robust and efficient WiFi automation app with consistent folder naming"""
     
     def __init__(self):
-        print("🚀 Initializing Robust WiFi App...")
+        print("🚀 Initializing Robust WiFi App with consistent folder naming...")
         
-        # Initialize dynamic file manager
+        # Initialize dynamic file manager for consistent folder naming
         self.file_manager = DynamicFileManager()
         
-        # Get today's CSV directory
+        # Get today's CSV directory using consistent naming (08jul, 09jul, 08aug)
         self.csv_dir = self.file_manager.get_download_directory()
-        print(f"📁 Using dynamic folder: {self.csv_dir}")
+        print(f"📁 Using consistent folder naming: {self.csv_dir}")
         
         # Email notifications
         self.email_service = WorkingEmailNotifications()
@@ -58,14 +59,16 @@ class CorrectedWiFiApp:
         self.setup_directories()
     
     def setup_directories(self):
-        """Setup required directories"""
+        """Setup required directories with consistent naming"""
         try:
-            # Ensure CSV directory exists
+            # Ensure CSV directory exists with consistent naming
             self.csv_dir.mkdir(parents=True, exist_ok=True)
             
             # Ensure download directory exists
             downloads_dir = Path("downloads")
             downloads_dir.mkdir(exist_ok=True)
+            
+            print(f"✅ Directories setup with consistent naming: {self.csv_dir}")
             
         except Exception as e:
             print(f"❌ Directory setup error: {e}")
@@ -77,7 +80,7 @@ class CorrectedWiFiApp:
             
             chrome_options = Options()
             
-            # Download settings
+            # Download settings - use consistent folder naming
             prefs = {
                 "download.default_directory": str(self.csv_dir.absolute()),
                 "download.prompt_for_download": False,
@@ -115,7 +118,7 @@ class CorrectedWiFiApp:
             return False
     
     def count_csv_files(self):
-        """Count CSV files in CSV directory"""
+        """Count CSV files in consistent CSV directory"""
         try:
             csv_files = list(self.csv_dir.glob("*.csv"))
             return len(csv_files)
@@ -484,13 +487,17 @@ class CorrectedWiFiApp:
         try:
             print(f"📧 Sending notification for {files_downloaded} files...")
             
-            subject = f"✅ CSV Download Success - {files_downloaded} files - {datetime.now().strftime('%m/%d/%Y')}"
+            # Get consistent folder info
+            date_folder = self.file_manager.get_date_folder_name()
+            
+            subject = f"✅ CSV Download Success - {files_downloaded} files - {date_folder} - {datetime.now().strftime('%m/%d/%Y')}"
             
             body = f"""
-🎉 WiFi Automation Success - Robust Version!
+🎉 WiFi Automation Success - Robust Version with Consistent Folder Naming!
 
 📊 Files Downloaded: {files_downloaded}
 📁 Download Directory: {self.csv_dir}
+📅 Date Folder: {date_folder}
 🕐 Completion Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 ✨ Robust Features Applied:
@@ -498,8 +505,10 @@ class CorrectedWiFiApp:
 - Text-based network element finding
 - Multiple selector fallbacks
 - Timing from proven login fix.txt
+- Consistent folder naming ({date_folder})
 
 🚀 System Status: OPERATIONAL
+📂 Folder Structure: Consistent naming format (08jul, 09jul, 08aug)
 """
             
             self.email_service.send_email(subject, body)
@@ -509,11 +518,16 @@ class CorrectedWiFiApp:
             print(f"❌ Failed to send email notification: {e}")
     
     def run_robust_automation(self):
-        """Run the robust automation with proper timing and error handling"""
+        """Run the robust automation with consistent folder naming"""
         try:
             print("=" * 60)
-            print("🔥 ROBUST WIFI APP - BEST OF BOTH WORLDS")
+            print("🔥 ROBUST WIFI APP - CONSISTENT FOLDER NAMING")
             print("=" * 60)
+            
+            # Display consistent folder info
+            date_folder = self.file_manager.get_date_folder_name()
+            print(f"📅 Using consistent date folder: {date_folder}")
+            print(f"📁 CSV Directory: {self.csv_dir}")
             
             # Setup Chrome
             if not self.setup_chrome():
@@ -572,29 +586,30 @@ class CorrectedWiFiApp:
             print("\n⏳ Waiting for downloads to complete...")
             time.sleep(10)
             
-            # Final check
+            # Final check with consistent folder naming
             final_count = self.count_csv_files()
             new_files = final_count - self.initial_files
             csv_files = list(self.csv_dir.glob("*.csv"))
             
-            print(f"\n📁 Final result: {final_count} CSV files total, {new_files} new files:")
+            print(f"\n📁 Final result in {date_folder}: {final_count} CSV files total, {new_files} new files:")
             for file in csv_files:
                 file_size = file.stat().st_size
                 print(f"  ✅ {file.name} ({file_size} bytes)")
             
             if new_files >= self.target_files:
                 print(f"\n🎉 SUCCESS! Downloaded {new_files}/{self.target_files} CSV files!")
+                print(f"📂 Consistent folder structure maintained: {date_folder}")
                 self.send_download_notification(new_files)
-                return True
+                return {"success": True, "files_downloaded": new_files, "date_folder": date_folder}
             else:
                 print(f"\n⚠️ Downloaded {new_files}/{self.target_files} CSV files")
                 if new_files > 0:
                     self.send_download_notification(new_files)
-                return success_count > 0
+                return {"success": success_count > 0, "files_downloaded": new_files, "date_folder": date_folder}
                 
         except Exception as e:
             print(f"❌ Application error: {e}")
-            return False
+            return {"success": False, "error": str(e)}
         finally:
             if self.driver:
                 print("\n⏳ Keeping Chrome open for 15 seconds...")
@@ -605,12 +620,13 @@ class CorrectedWiFiApp:
 def main():
     """Main function"""
     app = CorrectedWiFiApp()
-    success = app.run_robust_automation()
+    result = app.run_robust_automation()
     
-    if success:
+    if result and result.get("success"):
         print("\n" + "=" * 60)
         print("✅ SUCCESS! The robust app is working!")
-        print("CSV files have been downloaded!")
+        print("CSV files have been downloaded with consistent folder naming!")
+        print(f"📂 Date folder: {result.get('date_folder')}")
         print("=" * 60)
     else:
         print("\n" + "=" * 60)
@@ -618,7 +634,7 @@ def main():
         print("Check the console output for details")
         print("=" * 60)
     
-    return success
+    return result
 
 if __name__ == "__main__":
     main() 

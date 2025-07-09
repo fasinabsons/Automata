@@ -277,7 +277,7 @@ class DynamicFileManager:
         if date is None:
             date = datetime.now()
         
-        # Format: moon flower active users_DDMMYYYY.pdf
+        # Format: moon flower active users_DDMMYYYY.pdf (user wants datemonthyear format)
         return f"moon flower active users_{date.strftime('%d%m%Y')}.pdf"
     
     def cleanup_old_files(self, days_to_keep: int = 60) -> Dict[str, Any]:

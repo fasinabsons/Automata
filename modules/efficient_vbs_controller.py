@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Efficient VBS Controller
-Streamlined VBS automation controller for integration with enhanced service runner
-Combines all VBS phases into a single efficient workflow
+Efficient VBS Controller - FIXED FOR VB6 APPLICATION
+Streamlined VBS automation controller that properly targets VB6 application
+Prevents interference with other applications like Excel
 """
 
 import os
@@ -10,388 +10,262 @@ import sys
 import time
 import logging
 from pathlib import Path
+from typing import Dict, Optional, Any
 from datetime import datetime
-from typing import Dict, Any, Optional
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+# Import core modules
 from core.logger import logger
 from modules.vbs_app_controller import VBSAppController
-from modules.vbs_login_handler import VBSLoginHandler
+from modules.vbs_automation_phase1 import VBSPhase1_LaunchLogin_Fixed  # FIXED: Use VB6 implementation
+from modules.vbs_automation_phase2 import VBSPhase2_Navigation
 
 class EfficientVBSController:
     """
-    Efficient VBS Controller for streamlined automation
-    Integrates with enhanced service runner for complete workflow
+    Efficient VBS Controller for VB6 Application - FIXED
+    Ensures proper targeting of VB6 application without interfering with other apps
     """
     
     def __init__(self):
         self.logger = logger
-        self.app_controller = None
-        self.login_handler = None
-        self.is_initialized = False
-        self.current_session = None
+        
+        # Initialize VB6 automation phases
+        self.phase1 = VBSPhase1_LaunchLogin_Fixed()  # FIXED: VB6 implementation
+        self.phase2 = VBSPhase2_Navigation()
+        
+        # State tracking
+        self.vb6_window_handle = None
+        self.vb6_process_id = None
+        self.current_phase = None
         
         # Configuration
         self.config = {
             "max_retries": 3,
-            "retry_delay": 15,  # seconds
-            "session_timeout": 1800,  # 30 minutes
-            "auto_cleanup": True,
-            "enable_screenshots": True
+            "retry_delay": 10,
+            "phase_timeout": 300,  # 5 minutes per phase
+            "vb6_stabilization_time": 5
         }
         
-        self.logger.info("Efficient VBS Controller initialized", "EfficientVBS")
+        self.logger.info("Efficient VBS Controller (VB6 FIXED) initialized", "EfficientVBSController")
     
-    def initialize(self) -> Dict[str, Any]:
-        """Initialize VBS components"""
-        try:
-            self.logger.info("🔧 Initializing VBS components...", "EfficientVBS")
-            
-            # Initialize app controller
-            self.app_controller = VBSAppController()
-            
-            # Initialize login handler
-            self.login_handler = VBSLoginHandler(self.app_controller)
-            
-            self.is_initialized = True
-            self.logger.info("✅ VBS components initialized successfully", "EfficientVBS")
-            
-            return {"success": True, "message": "VBS components initialized"}
-            
-        except Exception as e:
-            error_msg = f"VBS initialization failed: {e}"
-            self.logger.error(error_msg, "EfficientVBS")
-            return {"success": False, "error": error_msg}
-    
-    def run_complete_vbs_automation(self, date_folder: str) -> Dict[str, Any]:
+    def run_vbs_automation(self, date_folder: str = None) -> Dict[str, Any]:
         """
-        Run complete VBS automation workflow
+        Run VBS automation for VB6 application
         
         Args:
-            date_folder: Date folder for Excel file processing (e.g., "03july")
+            date_folder: Optional date folder for file operations
             
         Returns:
             Dictionary with automation results
         """
         try:
-            self.logger.info(f"🚀 Starting complete VBS automation for {date_folder}", "EfficientVBS")
+            self.logger.info("🚀 Starting VB6 automation workflow...", "EfficientVBSController")
             
-            # Initialize if not already done
-            if not self.is_initialized:
-                init_result = self.initialize()
-                if not init_result["success"]:
-                    return init_result
-            
-            # Start session
-            session_start = datetime.now()
-            self.current_session = {
-                "start_time": session_start,
-                "date_folder": date_folder,
-                "steps_completed": []
-            }
-            
-            workflow_result = {
+            automation_result = {
                 "success": False,
-                "date_folder": date_folder,
-                "steps_completed": [],
+                "phases_completed": [],
                 "errors": [],
-                "start_time": session_start.isoformat(),
-                "excel_file": None,
-                "pdf_file": None
+                "start_time": datetime.now().isoformat(),
+                "date_folder": date_folder,
+                "vb6_window_handle": None,
+                "vb6_process_id": None
             }
             
-            # STEP 1: Launch VBS Application
-            self.logger.info("📱 STEP 1: Launching VBS Application", "EfficientVBS")
-            launch_result = self._launch_application_with_retry()
+            # Phase 1: VB6 Application Launch & Login
+            self.logger.info("🔥 Phase 1: VB6 Application Launch & Login", "EfficientVBSController")
+            self.current_phase = "phase1"
             
-            if not launch_result["success"]:
-                workflow_result["errors"].append(f"Application launch failed: {launch_result['error']}")
-                return workflow_result
+            phase1_result = self._run_phase_with_retry(
+                self.phase1.run_phase_1_complete_fixed,
+                "VB6 Phase 1 (Launch & Login)"
+            )
             
-            workflow_result["steps_completed"].append("application_launched")
-            self.logger.info("✅ Step 1 completed: Application launched", "EfficientVBS")
+            if not phase1_result["success"]:
+                automation_result["errors"].extend(phase1_result.get("errors", []))
+                self.logger.error(f"❌ VB6 Phase 1 failed: {phase1_result.get('errors', [])}", "EfficientVBSController")
+                return automation_result
             
-            # STEP 2: Perform Login
-            self.logger.info("🔐 STEP 2: Performing VBS Login", "EfficientVBS")
-            login_result = self._perform_login_with_retry()
+            # Store VB6 window information
+            self.vb6_window_handle = self.phase1.get_window_handle()
+            self.vb6_process_id = self.phase1.get_process_id()
             
-            if not login_result["success"]:
-                workflow_result["errors"].append(f"Login failed: {login_result['error']}")
-                return workflow_result
+            automation_result["phases_completed"].append("phase1")
+            automation_result["vb6_window_handle"] = self.vb6_window_handle
+            automation_result["vb6_process_id"] = self.vb6_process_id
             
-            workflow_result["steps_completed"].append("login_completed")
-            self.logger.info("✅ Step 2 completed: Login successful", "EfficientVBS")
+            self.logger.info(f"✅ VB6 Phase 1 completed successfully (Window: {self.vb6_window_handle}, PID: {self.vb6_process_id})", "EfficientVBSController")
             
-            # STEP 3: Navigate to WiFi Registration
-            self.logger.info("🧭 STEP 3: Navigating to WiFi Registration", "EfficientVBS")
-            navigation_result = self._navigate_to_wifi_registration()
+            # Phase 2: VB6 Navigation
+            self.logger.info("🧭 Phase 2: VB6 Navigation", "EfficientVBSController")
+            self.current_phase = "phase2"
             
-            if not navigation_result["success"]:
-                workflow_result["errors"].append(f"Navigation failed: {navigation_result['error']}")
-                return workflow_result
+            # Set window handle for Phase 2
+            self.phase2.set_window_handle(self.vb6_window_handle)
             
-            workflow_result["steps_completed"].append("navigation_completed")
-            self.logger.info("✅ Step 3 completed: Navigation successful", "EfficientVBS")
+            phase2_result = self._run_phase_with_retry(
+                self.phase2.run_phase_2_complete,
+                "VB6 Phase 2 (Navigation)"
+            )
             
-            # STEP 4: Import Excel File
-            self.logger.info("📊 STEP 4: Importing Excel File", "EfficientVBS")
-            import_result = self._import_excel_file(date_folder)
+            if not phase2_result["success"]:
+                automation_result["errors"].extend(phase2_result.get("errors", []))
+                self.logger.error(f"❌ VB6 Phase 2 failed: {phase2_result.get('errors', [])}", "EfficientVBSController")
+                return automation_result
             
-            if not import_result["success"]:
-                workflow_result["errors"].append(f"Excel import failed: {import_result['error']}")
-                return workflow_result
+            automation_result["phases_completed"].append("phase2")
+            self.logger.info("✅ VB6 Phase 2 completed successfully", "EfficientVBSController")
             
-            workflow_result["steps_completed"].append("excel_imported")
-            workflow_result["excel_file"] = import_result.get("excel_file")
-            self.logger.info("✅ Step 4 completed: Excel file imported", "EfficientVBS")
+            # Mark automation as successful
+            automation_result["success"] = True
+            automation_result["end_time"] = datetime.now().isoformat()
             
-            # STEP 5: Generate PDF Report
-            self.logger.info("📄 STEP 5: Generating PDF Report", "EfficientVBS")
-            pdf_result = self._generate_pdf_report(date_folder)
+            self.logger.info("🎉 VB6 automation workflow completed successfully!", "EfficientVBSController")
             
-            if not pdf_result["success"]:
-                workflow_result["errors"].append(f"PDF generation failed: {pdf_result['error']}")
-                return workflow_result
-            
-            workflow_result["steps_completed"].append("pdf_generated")
-            workflow_result["pdf_file"] = pdf_result.get("pdf_file")
-            self.logger.info("✅ Step 5 completed: PDF report generated", "EfficientVBS")
-            
-            # Mark workflow as successful
-            workflow_result["success"] = True
-            workflow_result["end_time"] = datetime.now().isoformat()
-            workflow_result["total_duration"] = (datetime.now() - session_start).total_seconds()
-            
-            self.logger.info("🎉 Complete VBS automation workflow successful!", "EfficientVBS")
-            self.logger.info(f"📊 Total duration: {workflow_result['total_duration']:.1f} seconds", "EfficientVBS")
-            self.logger.info(f"📄 PDF file: {workflow_result['pdf_file']}", "EfficientVBS")
-            
-            # Cleanup if configured
-            if self.config["auto_cleanup"]:
-                self._cleanup_session()
-            
-            return workflow_result
+            return automation_result
             
         except Exception as e:
-            error_msg = f"VBS automation workflow failed: {e}"
-            self.logger.error(error_msg, "EfficientVBS")
+            error_msg = f"VB6 automation workflow failed: {e}"
+            self.logger.error(error_msg, "EfficientVBSController")
             
-            workflow_result["errors"].append(error_msg)
-            workflow_result["end_time"] = datetime.now().isoformat()
+            automation_result["errors"].append(error_msg)
+            automation_result["end_time"] = datetime.now().isoformat()
             
-            # Cleanup on error
-            self._cleanup_session()
-            
-            return workflow_result
+            return automation_result
     
-    def _launch_application_with_retry(self) -> Dict[str, Any]:
-        """Launch VBS application with retry logic"""
+    def _run_phase_with_retry(self, phase_func, phase_name: str) -> Dict[str, Any]:
+        """Run a VB6 phase with retry logic"""
         for attempt in range(self.config["max_retries"]):
             try:
-                self.logger.info(f"🚀 Launch attempt {attempt + 1}/{self.config['max_retries']}", "EfficientVBS")
+                self.logger.info(f"Attempting {phase_name} (attempt {attempt + 1}/{self.config['max_retries']})", "EfficientVBSController")
                 
-                launch_result = self.app_controller.launch_application()
+                result = phase_func()
                 
-                if launch_result["success"]:
-                    self.logger.info("✅ Application launched successfully", "EfficientVBS")
-                    return launch_result
+                if result["success"]:
+                    self.logger.info(f"✅ {phase_name} completed successfully", "EfficientVBSController")
+                    return result
                 else:
-                    self.logger.warning(f"Launch attempt {attempt + 1} failed: {launch_result['error']}", "EfficientVBS")
+                    self.logger.warning(f"⚠️ {phase_name} failed on attempt {attempt + 1}: {result.get('errors', [])}", "EfficientVBSController")
                     
                     if attempt < self.config["max_retries"] - 1:
-                        self.logger.info(f"Retrying in {self.config['retry_delay']} seconds...", "EfficientVBS")
+                        self.logger.info(f"🔄 Retrying {phase_name} in {self.config['retry_delay']} seconds...", "EfficientVBSController")
                         time.sleep(self.config["retry_delay"])
-                    
+                    else:
+                        self.logger.error(f"❌ {phase_name} failed after {self.config['max_retries']} attempts", "EfficientVBSController")
+                        return result
+                        
             except Exception as e:
-                self.logger.error(f"Launch attempt {attempt + 1} exception: {e}", "EfficientVBS")
+                error_msg = f"{phase_name} attempt {attempt + 1} failed with exception: {e}"
+                self.logger.error(error_msg, "EfficientVBSController")
                 
                 if attempt < self.config["max_retries"] - 1:
+                    self.logger.info(f"🔄 Retrying {phase_name} in {self.config['retry_delay']} seconds...", "EfficientVBSController")
                     time.sleep(self.config["retry_delay"])
-        
-        return {"success": False, "error": "Application launch failed after all retry attempts"}
-    
-    def _perform_login_with_retry(self) -> Dict[str, Any]:
-        """Perform VBS login with retry logic"""
-        for attempt in range(self.config["max_retries"]):
-            try:
-                self.logger.info(f"🔐 Login attempt {attempt + 1}/{self.config['max_retries']}", "EfficientVBS")
-                
-                login_result = self.login_handler.perform_login()
-                
-                if login_result["success"]:
-                    self.logger.info("✅ Login completed successfully", "EfficientVBS")
-                    return login_result
                 else:
-                    self.logger.warning(f"Login attempt {attempt + 1} failed: {login_result['error']}", "EfficientVBS")
-                    
-                    if attempt < self.config["max_retries"] - 1:
-                        self.logger.info(f"Retrying in {self.config['retry_delay']} seconds...", "EfficientVBS")
-                        time.sleep(self.config["retry_delay"])
-                    
-            except Exception as e:
-                self.logger.error(f"Login attempt {attempt + 1} exception: {e}", "EfficientVBS")
-                
-                if attempt < self.config["max_retries"] - 1:
-                    time.sleep(self.config["retry_delay"])
+                    return {"success": False, "errors": [error_msg]}
         
-        return {"success": False, "error": "Login failed after all retry attempts"}
+        return {"success": False, "errors": [f"{phase_name} failed after all retry attempts"]}
     
-    def _navigate_to_wifi_registration(self) -> Dict[str, Any]:
-        """Navigate to WiFi User Registration"""
+    def get_vb6_window_handle(self) -> Optional[int]:
+        """Get current VB6 window handle"""
+        return self.vb6_window_handle
+    
+    def get_vb6_process_id(self) -> Optional[int]:
+        """Get current VB6 process ID"""
+        return self.vb6_process_id
+    
+    def get_current_phase(self) -> Optional[str]:
+        """Get current automation phase"""
+        return self.current_phase
+    
+    def is_vb6_application_ready(self) -> bool:
+        """Check if VB6 application is ready for automation"""
         try:
-            self.logger.info("🧭 Navigating to WiFi User Registration...", "EfficientVBS")
-            
-            # Import navigation module
-            from modules.vbs_automation_phase2 import VBSPhase2_Navigation
-            
-            # Create navigation instance
-            navigation = VBSPhase2_Navigation(self.app_controller.window_handle)
-            
-            # Perform navigation
-            nav_result = navigation.task_2_1_navigate_to_wifi_registration()
-            
-            if nav_result["success"]:
-                self.logger.info("✅ Navigation completed successfully", "EfficientVBS")
-                return nav_result
-            else:
-                self.logger.error(f"Navigation failed: {nav_result['error']}", "EfficientVBS")
-                return nav_result
-                
-        except Exception as e:
-            error_msg = f"Navigation exception: {e}"
-            self.logger.error(error_msg, "EfficientVBS")
-            return {"success": False, "error": error_msg}
-    
-    def _import_excel_file(self, date_folder: str) -> Dict[str, Any]:
-        """Import Excel file into VBS"""
-        try:
-            self.logger.info(f"📊 Importing Excel file for {date_folder}...", "EfficientVBS")
-            
-            # Import Excel import module
-            from modules.vbs_automation_phase3 import VBSPhase3_ExcelImport
-            
-            # Create import instance
-            excel_import = VBSPhase3_ExcelImport(self.app_controller.window_handle)
-            
-            # Perform Excel import
-            import_result = excel_import.run_phase_3_complete(date_folder)
-            
-            if import_result["success"]:
-                self.logger.info("✅ Excel import completed successfully", "EfficientVBS")
-                return import_result
-            else:
-                self.logger.error(f"Excel import failed: {import_result['error']}", "EfficientVBS")
-                return import_result
-                
-        except Exception as e:
-            error_msg = f"Excel import exception: {e}"
-            self.logger.error(error_msg, "EfficientVBS")
-            return {"success": False, "error": error_msg}
-    
-    def _generate_pdf_report(self, date_folder: str) -> Dict[str, Any]:
-        """Generate PDF report from VBS"""
-        try:
-            self.logger.info(f"📄 Generating PDF report for {date_folder}...", "EfficientVBS")
-            
-            # Import PDF generation module
-            from modules.vbs_automation_phase4 import VBSPhase4_PDFGeneration
-            
-            # Create PDF generation instance
-            pdf_gen = VBSPhase4_PDFGeneration(self.app_controller.window_handle)
-            
-            # Perform PDF generation
-            pdf_result = pdf_gen.run_phase_4_complete(date_folder)
-            
-            if pdf_result["success"]:
-                self.logger.info("✅ PDF generation completed successfully", "EfficientVBS")
-                return pdf_result
-            else:
-                self.logger.error(f"PDF generation failed: {pdf_result['error']}", "EfficientVBS")
-                return pdf_result
-                
-        except Exception as e:
-            error_msg = f"PDF generation exception: {e}"
-            self.logger.error(error_msg, "EfficientVBS")
-            return {"success": False, "error": error_msg}
-    
-    def _cleanup_session(self):
-        """Clean up VBS session"""
-        try:
-            self.logger.info("🧹 Cleaning up VBS session...", "EfficientVBS")
-            
-            # Close VBS application
-            if self.app_controller:
-                self.app_controller.close_application()
-            
-            # Reset session
-            self.current_session = None
-            
-            self.logger.info("✅ VBS session cleanup completed", "EfficientVBS")
-            
-        except Exception as e:
-            self.logger.error(f"Session cleanup failed: {e}", "EfficientVBS")
-    
-    def get_session_status(self) -> Dict[str, Any]:
-        """Get current session status"""
-        if not self.current_session:
-            return {"active": False, "message": "No active session"}
-        
-        return {
-            "active": True,
-            "start_time": self.current_session["start_time"].isoformat(),
-            "date_folder": self.current_session["date_folder"],
-            "steps_completed": self.current_session["steps_completed"],
-            "duration": (datetime.now() - self.current_session["start_time"]).total_seconds()
-        }
-    
-    def is_vbs_available(self) -> bool:
-        """Check if VBS is available for automation"""
-        try:
-            if not self.is_initialized:
+            if not self.vb6_window_handle:
                 return False
             
-            if not self.app_controller:
+            # Check if VB6 window is still valid
+            import win32gui
+            if not win32gui.IsWindow(self.vb6_window_handle):
                 return False
             
-            return self.app_controller.is_application_running()
+            if not win32gui.IsWindowVisible(self.vb6_window_handle):
+                return False
+            
+            return True
             
         except Exception as e:
-            self.logger.error(f"VBS availability check failed: {e}", "EfficientVBS")
+            self.logger.error(f"VB6 application readiness check failed: {e}", "EfficientVBSController")
             return False
+    
+    def cleanup_vb6_automation(self):
+        """Cleanup VB6 automation resources"""
+        try:
+            self.logger.info("🧹 Cleaning up VB6 automation resources...", "EfficientVBSController")
+            
+            # Close VB6 application if needed
+            if self.vb6_window_handle:
+                try:
+                    import win32gui
+                    import win32con
+                    win32gui.PostMessage(self.vb6_window_handle, win32con.WM_CLOSE, 0, 0)
+                    time.sleep(2)
+                except:
+                    pass
+            
+            # Reset state
+            self.vb6_window_handle = None
+            self.vb6_process_id = None
+            self.current_phase = None
+            
+            self.logger.info("✅ VB6 automation cleanup completed", "EfficientVBSController")
+            
+        except Exception as e:
+            self.logger.error(f"VB6 automation cleanup failed: {e}", "EfficientVBSController")
 
-def test_efficient_vbs_controller():
-    """Test the efficient VBS controller"""
-    print("🧪 Testing Efficient VBS Controller")
-    print("=" * 50)
+# Test function
+def test_efficient_vb6_controller():
+    """Test the efficient VB6 controller"""
+    print("🧪 Testing Efficient VB6 Controller")
+    print("=" * 60)
     
     controller = EfficientVBSController()
     
-    # Test initialization
-    print("\n1. Testing initialization...")
-    init_result = controller.initialize()
-    print(f"   Initialization result: {init_result}")
-    
-    # Test availability check
-    print("\n2. Testing VBS availability...")
-    available = controller.is_vbs_available()
-    print(f"   VBS available: {available}")
-    
-    # Test complete workflow (with current date)
-    from datetime import date
-    today = date.today()
-    test_date_folder = f"{today.day:02d}{today.strftime('%B').lower()}"
-    
-    print(f"\n3. Testing complete workflow for {test_date_folder}...")
-    workflow_result = controller.run_complete_vbs_automation(test_date_folder)
-    
-    print(f"   Workflow success: {workflow_result['success']}")
-    print(f"   Steps completed: {workflow_result['steps_completed']}")
-    print(f"   Errors: {workflow_result['errors']}")
-    
-    print("\n✅ Efficient VBS Controller testing completed")
+    try:
+        # Test VB6 automation
+        print("\n1. Testing VB6 automation workflow...")
+        result = controller.run_vbs_automation()
+        
+        print(f"\n📊 Results:")
+        print(f"   Success: {result['success']}")
+        print(f"   Phases completed: {result.get('phases_completed', [])}")
+        print(f"   VB6 Window Handle: {result.get('vb6_window_handle')}")
+        print(f"   VB6 Process ID: {result.get('vb6_process_id')}")
+        print(f"   Errors: {result.get('errors', [])}")
+        
+        if result["success"]:
+            print("\n✅ VB6 automation completed successfully!")
+            
+            # Test readiness check
+            print("\n2. Testing VB6 application readiness...")
+            if controller.is_vb6_application_ready():
+                print("✅ VB6 application is ready for further automation")
+            else:
+                print("❌ VB6 application is not ready")
+        else:
+            print(f"\n❌ VB6 automation failed: {result.get('errors', [])}")
+        
+    except Exception as e:
+        print(f"❌ Test failed: {e}")
+        
+    finally:
+        # Cleanup
+        controller.cleanup_vb6_automation()
+        
+    print("\n" + "=" * 60)
+    print("Efficient VB6 Controller Test Completed")
 
 if __name__ == "__main__":
-    test_efficient_vbs_controller() 
+    test_efficient_vb6_controller() 

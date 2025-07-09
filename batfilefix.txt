@@ -1,0 +1,96 @@
+Message: '✅ Temporary FAST schedule added: 08:56'
+Arguments: ()
+2025-07-08 08:54:54,333 - EnhancedWiFiService - INFO - 🧪 Added immediate FAST test schedule for 08:56
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f9ea' in position 55: character maps to <undefined>
+Call stack:
+  File "C:\Users\Lenovo\Videos\Automata\enhanced_service_runner.py", line 820, in <module>
+    main()
+  File "C:\Users\Lenovo\Videos\Automata\enhanced_service_runner.py", line 810, in main
+    service.start_service()
+  File "C:\Users\Lenovo\Videos\Automata\enhanced_service_runner.py", line 733, in start_service
+    self.logger.info(f"🧪 Added immediate FAST test schedule for {test_time_str}")
+Message: '🧪 Added immediate FAST test schedule for 08:56'
+Arguments: ()
+2025-07-08 08:54:54,333 - EnhancedWiFiService - INFO - ✅ Enhanced FAST WiFi Service started successfully
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2705' in position 55: character maps to <undefined>
+Call stack:
+  File "C:\Users\Lenovo\Videos\Automata\enhanced_service_runner.py", line 820, in <module>
+    main()
+  File "C:\Users\Lenovo\Videos\Automata\enhanced_service_runner.py", line 810, in main
+    service.start_service()
+  File "C:\Users\Lenovo\Videos\Automata\enhanced_service_runner.py", line 735, in start_service
+    self.logger.info("✅ Enhanced FAST WiFi Service started successfully")
+Message: '✅ Enhanced FAST WiFi Service started successfully'
+Arguments: ()
+2025-07-08 08:56:04,341 - EnhancedWiFiService - INFO - 🚀 Starting FAST WiFi download for slot: temporary-immediate-test
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f680' in position 55: character maps to <undefined>
+Call stack:
+  File "C:\Users\Lenovo\Videos\Automata\enhanced_service_runner.py", line 820, in <module>
+    main()
+  File "C:\Users\Lenovo\Videos\Automata\enhanced_service_runner.py", line 810, in main
+    service.start_service()
+  File "C:\Users\Lenovo\Videos\Automata\enhanced_service_runner.py", line 741, in start_service
+    schedule.run_pending()
+  File "C:\Users\Lenovo\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\schedule\__init__.py", line 854, in run_pending
+    default_scheduler.run_pending()
+  File "C:\Users\Lenovo\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\schedule\__init__.py", line 101, in run_pending
+    self._run_job(job)
+  File "C:\Users\Lenovo\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\schedule\__init__.py", line 173, in _run_job
+    ret = job.run()
+  File "C:\Users\Lenovo\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\schedule\__init__.py", line 691, in run
+    ret = self.job_func()
+  File "C:\Users\Lenovo\Videos\Automata\enhanced_service_runner.py", line 269, in run_fast_wifi_download
+    self.logger.info(f"🚀 Starting FAST WiFi download for slot: {slot_name}")
+Message: '🚀 Starting FAST WiFi download for slot: temporary-immediate-test'
+Arguments: ()
+2025-07-08 08:56:04,344 - EnhancedWiFiService - INFO - 🌙 Outside business hours, skipping scheduled download
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f319' in position 55: character maps to <undefined>
+Call stack:
+  File "C:\Users\Lenovo\Videos\Automata\enhanced_service_runner.py", line 820, in <module>
+    main()
+  File "C:\Users\Lenovo\Videos\Automata\enhanced_service_runner.py", line 810, in main
+    service.start_service()
+  File "C:\Users\Lenovo\Videos\Automata\enhanced_service_runner.py", line 741, in start_service
+    schedule.run_pending()
+  File "C:\Users\Lenovo\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\schedule\__init__.py", line 854, in run_pending
+    default_scheduler.run_pending()
+  File "C:\Users\Lenovo\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\schedule\__init__.py", line 101, in run_pending
+    self._run_job(job)
+  File "C:\Users\Lenovo\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\schedule\__init__.py", line 173, in _run_job
+    ret = job.run()
+  File "C:\Users\Lenovo\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\schedule\__init__.py", line 691, in run
+    ret = self.job_func()
+  File "C:\Users\Lenovo\Videos\Automata\enhanced_service_runner.py", line 273, in run_fast_wifi_download
+    self.logger.info("🌙 Outside business hours, skipping scheduled download")
+Message: '🌙 Outside business hours, skipping scheduled download'
+Arguments: ()
+
+

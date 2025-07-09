@@ -9,12 +9,12 @@ import sys
 import time
 import logging
 from datetime import datetime, date
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 import traceback
 from pathlib import Path
 
 # Import all phase modules
-from modules.vbs_automation_phase1 import VBSPhase1_LaunchLogin
+from modules.vbs_automation_phase1 import VBSPhase1_Enhanced
 from modules.vbs_automation_phase2 import VBSPhase2_Navigation
 from modules.vbs_automation_phase3 import VBSPhase3_ExcelImport
 from modules.vbs_automation_phase4 import VBSPhase4_PDFGeneration
@@ -27,14 +27,14 @@ class VBSMasterOrchestrator:
         self.logger = self._setup_logging()
         
         # Phase instances
-        self.phase1 = VBSPhase1_LaunchLogin()
+        self.phase1 = VBSPhase1_Enhanced()
         self.phase2 = VBSPhase2_Navigation()
         self.phase3 = VBSPhase3_ExcelImport()
         self.phase4 = VBSPhase4_PDFGeneration()
         self.email_service = EmailService()
         
         # Workflow state
-        self.window_handle = None
+        self.window_handle: Optional[int] = None
         self.current_phase = None
         self.workflow_start_time = None
         
@@ -80,7 +80,7 @@ class VBSMasterOrchestrator:
         
         return logger
     
-    def run_complete_workflow(self, date_folder: str) -> Dict[str, any]:
+    def run_complete_workflow(self, date_folder: str) -> Dict[str, Any]:
         """Run the complete VBS automation workflow"""
         try:
             self.workflow_start_time = datetime.now()
@@ -102,7 +102,7 @@ class VBSMasterOrchestrator:
             self.logger.info("🔥 PHASE 1: Application Launch & Login")
             self.current_phase = "phase1"
             phase1_result = self._run_phase_with_retry(
-                self.phase1.run_phase_1_complete, 
+                self.phase1.run_simple_login, 
                 "Phase 1 (Launch & Login)"
             )
             
@@ -114,6 +114,13 @@ class VBSMasterOrchestrator:
             workflow_result["phases_completed"].append("phase1")
             self.window_handle = self.phase1.get_window_handle()
             self.logger.info("✅ Phase 1 completed successfully")
+            
+            # Check if window handle is valid before proceeding
+            if self.window_handle is None:
+                error_msg = "Phase 1 completed but no valid window handle available"
+                workflow_result["errors"].append(error_msg)
+                self._send_failure_email(workflow_result, error_msg)
+                return workflow_result
             
             # PHASE 2: Navigation
             self.logger.info("🧭 PHASE 2: Navigation to WiFi User Registration")
@@ -213,7 +220,7 @@ class VBSMasterOrchestrator:
             
             return workflow_result
     
-    def _run_phase_with_retry(self, phase_func, phase_name: str) -> Dict[str, any]:
+    def _run_phase_with_retry(self, phase_func, phase_name: str) -> Dict[str, Any]:
         """Run a phase with retry logic"""
         for attempt in range(self.config["max_retries"]):
             try:
@@ -245,7 +252,7 @@ class VBSMasterOrchestrator:
         
         return {"success": False, "errors": [f"{phase_name} failed after all retry attempts"]}
     
-    def _send_success_email(self, workflow_result: Dict[str, any]) -> Dict[str, any]:
+    def _send_success_email(self, workflow_result: Dict[str, Any]) -> Dict[str, Any]:
         """Send success email notification"""
         try:
             if not self.config["email_on_success"]:
@@ -274,21 +281,33 @@ class VBSMasterOrchestrator:
             Automated by VBS Integration
             """
             
-            # Send email
-            email_result = self.email_service.send_email(
-                subject=subject,
-                body=body,
-                attachment_path=workflow_result.get('pdf_file')
-            )
+            # Send email with proper attachment handling
+            attachments = []
+            if workflow_result.get('pdf_file'):
+                attachments.append(Path(workflow_result['pdf_file']))
             
-            return email_result
+            # Send email
+            try:
+                email_sent = self.email_service.send_email(
+                    subject=subject,
+                    body=body,
+                    attachments=attachments if attachments else None
+                )
+                
+                if email_sent:
+                    return {"success": True, "message": "Success email sent"}
+                else:
+                    return {"success": False, "error": "Email service returned False"}
+                    
+            except Exception as e:
+                return {"success": False, "error": f"Email sending failed: {e}"}
             
         except Exception as e:
             error_msg = f"Success email failed: {e}"
             self.logger.error(error_msg)
             return {"success": False, "error": error_msg}
     
-    def _send_failure_email(self, workflow_result: Dict[str, any], failure_reason: str) -> Dict[str, any]:
+    def _send_failure_email(self, workflow_result: Dict[str, Any], failure_reason: str) -> Dict[str, Any]:
         """Send failure email notification"""
         try:
             if not self.config["email_on_failure"]:
@@ -320,12 +339,19 @@ class VBSMasterOrchestrator:
             """
             
             # Send email
-            email_result = self.email_service.send_email(
-                subject=subject,
-                body=body
-            )
-            
-            return email_result
+            try:
+                email_sent = self.email_service.send_email(
+                    subject=subject,
+                    body=body
+                )
+                
+                if email_sent:
+                    return {"success": True, "message": "Failure email sent"}
+                else:
+                    return {"success": False, "error": "Email service returned False"}
+                    
+            except Exception as e:
+                return {"success": False, "error": f"Email sending failed: {e}"}
             
         except Exception as e:
             error_msg = f"Failure email failed: {e}"
@@ -349,7 +375,7 @@ class VBSMasterOrchestrator:
         except Exception as e:
             self.logger.error(f"Cleanup failed: {e}")
     
-    def get_current_status(self) -> Dict[str, any]:
+    def get_current_status(self) -> Dict[str, Any]:
         """Get current workflow status"""
         return {
             "current_phase": self.current_phase,
@@ -358,13 +384,13 @@ class VBSMasterOrchestrator:
             "config": self.config
         }
     
-    def update_config(self, new_config: Dict[str, any]):
+    def update_config(self, new_config: Dict[str, Any]):
         """Update configuration"""
         self.config.update(new_config)
         self.logger.info(f"Configuration updated: {new_config}")
 
 # Integration with existing system
-def run_vbs_automation_for_date(date_folder: str) -> Dict[str, any]:
+def run_vbs_automation_for_date(date_folder: str) -> Dict[str, Any]:
     """
     Main entry point for VBS automation
     Called by the enhanced service runner when Excel files are ready

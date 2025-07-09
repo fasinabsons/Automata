@@ -73,10 +73,10 @@ class EnhancedWiFiServiceWithDynamicFiles:
         # Initialize dynamic file system
         self.initialize_dynamic_system()
         
-        self.logger.info("✅ Enhanced WiFi Service with Dynamic Files and VBS Integration initialized")
+        self.logger.info("SUCCESS: Enhanced WiFi Service with Dynamic Files and VBS Integration initialized")
     
     def setup_logging(self):
-        """Setup logging with crash logging"""
+        """Setup logging with crash logging and Unicode support"""
         try:
             # Main logger
             self.logger = logging.getLogger("EnhancedWiFiService")
@@ -88,74 +88,86 @@ class EnhancedWiFiServiceWithDynamicFiles:
             
             # Create handlers if they don't exist
             if not self.logger.handlers:
+                # Console handler with UTF-8 encoding
                 handler = logging.StreamHandler()
                 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
                 handler.setFormatter(formatter)
+                
+                # Try to configure UTF-8 encoding for console
+                try:
+                    import sys
+                    if hasattr(sys.stdout, 'reconfigure'):
+                        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+                    if hasattr(sys.stderr, 'reconfigure'):
+                        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+                except Exception:
+                    pass  # Ignore if reconfigure is not available
+                
                 self.logger.addHandler(handler)
                 
-                # File handler
+                # File handler with UTF-8 encoding
                 log_file = project_root / "EHC_Logs" / "enhanced_service.log"
                 log_file.parent.mkdir(exist_ok=True)
-                file_handler = logging.FileHandler(log_file)
+                file_handler = logging.FileHandler(log_file, encoding='utf-8')
                 file_handler.setFormatter(formatter)
                 self.logger.addHandler(file_handler)
             
         except Exception as e:
-            print(f"❌ Logging setup failed: {e}")
+            print(f"Logging setup failed: {e}")
     
     def setup_components(self):
         """Initialize FAST components with error handling"""
         try:
-            self.logger.info("🔧 Initializing FAST WiFi components...")
+            self.logger.info("SETUP: Initializing FAST WiFi components...")
             
             # Initialize FAST WiFi automation with retry
             max_retries = 3
             for attempt in range(max_retries):
                 try:
                     self.wifi_app = CorrectedWiFiApp()  # Fast version
-                    self.logger.info("✅ FAST WiFi automation initialized")
+                    self.logger.info("SUCCESS: FAST WiFi automation initialized")
                     break
                 except Exception as e:
-                    self.logger.error(f"❌ WiFi app init attempt {attempt + 1} failed: {e}")
+                    self.logger.error(f"ERROR: WiFi app init attempt {attempt + 1} failed: {e}")
                     if attempt == max_retries - 1:
                         raise
                     time.sleep(5)
             
-            self.logger.info("✅ All FAST components initialized successfully")
+            self.logger.info("SUCCESS: All FAST components initialized successfully")
             
         except Exception as e:
-            self.logger.error(f"❌ Component initialization failed: {e}")
+            self.logger.error(f"ERROR: Component initialization failed: {e}")
             self.handle_crash(e, "Component initialization")
             raise
     
     def initialize_dynamic_system(self):
         """Initialize dynamic file system and check 8-file minimum"""
         try:
-            self.logger.info("📁 Initializing dynamic file system...")
+            self.logger.info("FOLDER: Initializing dynamic file system...")
             
             # Create today's folder if it doesn't exist
             today_folder = self.file_manager.get_download_directory()
-            self.logger.info(f"📁 Today's folder: {today_folder}")
+            self.logger.info(f"FOLDER: Today's folder: {today_folder}")
             
             # Check current file status
             status = self.file_manager.get_current_date_folder_status()
             current_files = status['csv_count']
             
-            self.logger.info(f"📊 Current CSV files: {current_files}/{self.minimum_files_required}")
+            self.logger.info(f"DATA: Current CSV files: {current_files}/{self.minimum_files_required}")
             
             # Check if we need to download files to meet minimum
             if current_files < self.minimum_files_required:
                 files_needed = self.minimum_files_required - current_files
-                self.logger.warning(f"⚠️ Only {current_files} files found, need {files_needed} more files")
+                self.logger.warning(f"WARNING: Only {current_files} files found, need {files_needed} more files")
                 
                 # Check if we're in business hours
                 if self.is_business_hours():
-                    self.logger.info("🕐 In business hours, will ensure minimum files")
+                    self.logger.info("TIME: In business hours, will ensure minimum files")
                     # The ensure_minimum_files will be called during health checks
                 else:
-                    self.logger.info("🌙 Outside business hours, will check again during business hours")
+                    self.logger.info("NIGHT: Outside business hours, will check again during business hours")
             else:
-                self.logger.info("✅ Sufficient files for Excel generation")
+                self.logger.info("SUCCESS: Sufficient files for Excel generation")
             
             # Schedule daily folder creation at midnight
             schedule.every().day.at("00:00").do(self.create_daily_folder)
@@ -163,10 +175,10 @@ class EnhancedWiFiServiceWithDynamicFiles:
             # Schedule monthly cleanup
             schedule.every().month.do(self.file_manager.cleanup_old_files)
             
-            self.logger.info("✅ Dynamic file system initialized successfully")
+            self.logger.info("SUCCESS: Dynamic file system initialized successfully")
             
         except Exception as e:
-            self.logger.error(f"❌ Dynamic file system initialization failed: {e}")
+            self.logger.error(f"ERROR: Dynamic file system initialization failed: {e}")
             # Don't crash the service for this
     
     def is_business_hours(self) -> bool:
@@ -177,11 +189,11 @@ class EnhancedWiFiServiceWithDynamicFiles:
     def create_daily_folder(self):
         """Create new daily folder at midnight"""
         try:
-            self.logger.info("🌅 Creating new daily folder at midnight...")
+            self.logger.info("DAILY: Creating new daily folder at midnight...")
             
             # Create new folder
             new_folder = self.file_manager.get_download_directory()
-            self.logger.info(f"📁 Created new folder: {new_folder}")
+            self.logger.info(f"FOLDER: Created new folder: {new_folder}")
             
             # Reset daily counters
             self.daily_files_downloaded = 0
@@ -190,16 +202,16 @@ class EnhancedWiFiServiceWithDynamicFiles:
             # Send notification
             self.email_service.send_daily_folder_notification(str(new_folder))
             
-            self.logger.info("✅ Daily folder creation completed")
+            self.logger.info("SUCCESS: Daily folder creation completed")
             
         except Exception as e:
-            self.logger.error(f"❌ Daily folder creation failed: {e}")
+            self.logger.error(f"ERROR: Daily folder creation failed: {e}")
     
     def ensure_minimum_files(self) -> bool:
         """Ensure minimum 8 files are available - triggers FAST downloads if needed"""
         try:
             if not self.is_business_hours():
-                self.logger.info("🌙 Outside business hours, skipping file minimum check")
+                self.logger.info("NIGHT: Outside business hours, skipping file minimum check")
                 return True
             
             # Check current file count
@@ -207,14 +219,14 @@ class EnhancedWiFiServiceWithDynamicFiles:
             current_files = status['csv_count']
             
             if current_files >= self.minimum_files_required:
-                self.logger.info(f"✅ Sufficient files: {current_files}/{self.minimum_files_required}")
+                self.logger.info(f"SUCCESS: Sufficient files: {current_files}/{self.minimum_files_required}")
                 return True
             
             files_needed = self.minimum_files_required - current_files
-            self.logger.warning(f"⚠️ Insufficient files: {current_files}/{self.minimum_files_required}, need {files_needed} more")
+            self.logger.warning(f"WARNING: Insufficient files: {current_files}/{self.minimum_files_required}, need {files_needed} more")
             
             # Trigger FAST download to meet minimum
-            self.logger.info("🚀 Triggering FAST CSV download to meet 8-file minimum...")
+            self.logger.info("START: Triggering FAST CSV download to meet 8-file minimum...")
             
             # Run the ROBUST download with retry and refresh
             result = self.wifi_app.run_robust_automation()
@@ -228,7 +240,7 @@ class EnhancedWiFiServiceWithDynamicFiles:
                 self.daily_files_downloaded += new_files
                 self.last_successful_run = datetime.now()
                 
-                self.logger.info(f"✅ FAST download successful! Added {new_files} files (total: {files_after})")
+                self.logger.info(f"SUCCESS: FAST download successful! Added {new_files} files (total: {files_after})")
                 
                 # Send download notification
                 self.email_service.send_csv_download_notification(
@@ -240,13 +252,13 @@ class EnhancedWiFiServiceWithDynamicFiles:
                 
                 # Check if we should generate Excel (8 files reached)
                 if files_after >= self.minimum_files_required and not self.excel_generated_today:
-                    self.logger.info(f"📊 {files_after} files reached, triggering Excel generation...")
+                    self.logger.info(f"DATA: {files_after} files reached, triggering Excel generation...")
                     self.generate_excel_file()
                 
                 return True
             else:
                 error_msg = result.get("error", "Unknown error") if result else "No result returned"
-                self.logger.error(f"❌ FAST download failed: {error_msg}")
+                self.logger.error(f"ERROR: FAST download failed: {error_msg}")
                 
                 # Send failure notification
                 status_after = self.file_manager.get_current_date_folder_status()
@@ -260,17 +272,17 @@ class EnhancedWiFiServiceWithDynamicFiles:
                 return False
                 
         except Exception as e:
-            self.logger.error(f"❌ Error ensuring minimum files: {e}")
+            self.logger.error(f"ERROR: Error ensuring minimum files: {e}")
             return False
     
     def run_fast_wifi_download(self, slot_name: str = "scheduled"):
         """Run FAST WiFi download for scheduled tasks"""
         try:
-            self.logger.info(f"🚀 Starting FAST WiFi download for slot: {slot_name}")
+            self.logger.info(f"START: Starting FAST WiFi download for slot: {slot_name}")
             
             # Check if we're in business hours
             if not self.is_business_hours():
-                self.logger.info("🌙 Outside business hours, skipping scheduled download")
+                self.logger.info("NIGHT: Outside business hours, skipping scheduled download")
                 return
             
             # Get current file count before download
@@ -289,7 +301,7 @@ class EnhancedWiFiServiceWithDynamicFiles:
                 self.daily_files_downloaded += new_files
                 self.last_successful_run = datetime.now()
                 
-                self.logger.info(f"✅ FAST download successful for {slot_name}! Added {new_files} files (total: {files_after})")
+                self.logger.info(f"SUCCESS: FAST download successful for {slot_name}! Added {new_files} files (total: {files_after})")
                 
                 # Send download notification
                 self.email_service.send_csv_download_notification(
@@ -301,12 +313,12 @@ class EnhancedWiFiServiceWithDynamicFiles:
                 
                 # Check if we should generate Excel (8 files reached)
                 if files_after >= self.minimum_files_required and not self.excel_generated_today:
-                    self.logger.info(f"📊 {files_after} files reached, triggering Excel generation...")
+                    self.logger.info(f"DATA: {files_after} files reached, triggering Excel generation...")
                     self.generate_excel_file()
                 
             else:
                 error_msg = result.get("error", "Unknown error") if result else "No result returned"
-                self.logger.error(f"❌ FAST download failed for {slot_name}: {error_msg}")
+                self.logger.error(f"ERROR: FAST download failed for {slot_name}: {error_msg}")
                 
                 # Send failure notification
                 status_after = self.file_manager.get_current_date_folder_status()
@@ -318,13 +330,13 @@ class EnhancedWiFiServiceWithDynamicFiles:
                 )
                 
         except Exception as e:
-            self.logger.error(f"❌ Error in FAST WiFi download for {slot_name}: {e}")
+            self.logger.error(f"ERROR: Error in FAST WiFi download for {slot_name}: {e}")
             self.handle_crash(e, f"FAST WiFi download ({slot_name})")
     
     def check_and_create_startup_folder(self):
         """Check if we need to create a new folder at startup (if starting at midnight or folder doesn't exist)"""
         try:
-            self.logger.info("🌅 Checking if startup folder creation is needed...")
+            self.logger.info("DAILY: Checking if startup folder creation is needed...")
             
             current_time = datetime.now()
             
@@ -336,7 +348,7 @@ class EnhancedWiFiServiceWithDynamicFiles:
             folder_exists = os.path.exists(today_folder)
             
             if is_midnight_startup or not folder_exists:
-                self.logger.info(f"🌅 Creating startup folder: midnight={is_midnight_startup}, exists={folder_exists}")
+                self.logger.info(f"DAILY: Creating startup folder: midnight={is_midnight_startup}, exists={folder_exists}")
                 
                 # Create the folder
                 self.create_daily_folder()
@@ -348,13 +360,13 @@ class EnhancedWiFiServiceWithDynamicFiles:
                     self.excel_generated_today = False
                     self.vbs_automation_completed_today = False
                 
-                self.logger.info("✅ Startup folder creation completed")
+                self.logger.info("SUCCESS: Startup folder creation completed")
                 
             else:
                 self.logger.info("ℹ️ No startup folder creation needed")
                 
         except Exception as e:
-            self.logger.error(f"❌ Startup folder creation failed: {e}")
+            self.logger.error(f"ERROR: Startup folder creation failed: {e}")
             # Don't crash the service for this
     
     def handle_crash(self, error: Exception, context: str):
@@ -415,11 +427,11 @@ class EnhancedWiFiServiceWithDynamicFiles:
                            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
             
             # Exit current instance
-            self.logger.info("✅ New service instance started, exiting current instance")
+            self.logger.info("SUCCESS: New service instance started, exiting current instance")
             sys.exit(0)
             
         except Exception as e:
-            self.logger.error(f"❌ System restart failed: {e}")
+            self.logger.error(f"ERROR: System restart failed: {e}")
             # Last resort - Windows restart
             os.system("shutdown /r /t 300 /c 'WiFi Service restart - System will restart in 5 minutes'")
     
@@ -434,13 +446,13 @@ class EnhancedWiFiServiceWithDynamicFiles:
                 self.daily_files_downloaded = state.get("daily_files", 0)
                 self.excel_generated_today = state.get("excel_generated", False)
                 
-                self.logger.info(f"📊 Loaded previous state: {self.daily_files_downloaded} files, Excel: {self.excel_generated_today}")
+                self.logger.info(f"DATA: Loaded previous state: {self.daily_files_downloaded} files, Excel: {self.excel_generated_today}")
                 
                 # Clean up state file
                 state_file.unlink()
                 
         except Exception as e:
-            self.logger.error(f"❌ Failed to load previous state: {e}")
+            self.logger.error(f"ERROR: Failed to load previous state: {e}")
     
     def add_to_startup(self):
         """Add to Windows startup with enhanced registry entry"""
@@ -466,11 +478,11 @@ class EnhancedWiFiServiceWithDynamicFiles:
                     startup_cmd
                 )
             
-            self.logger.info("✅ Added to Windows startup")
+            self.logger.info("SUCCESS: Added to Windows startup")
             return True
             
         except Exception as e:
-            self.logger.error(f"❌ Failed to add to startup: {e}")
+            self.logger.error(f"ERROR: Failed to add to startup: {e}")
             return False
     
     def health_check(self):
@@ -489,21 +501,21 @@ class EnhancedWiFiServiceWithDynamicFiles:
             memory_mb = process.memory_info().rss / 1024 / 1024
             
             if memory_mb > 500:  # 500MB threshold
-                self.logger.warning(f"⚠️ High memory usage: {memory_mb:.1f}MB")
+                self.logger.warning(f"WARNING: High memory usage: {memory_mb:.1f}MB")
             
             # Check disk space
             disk_usage = psutil.disk_usage(str(project_root))
             free_gb = disk_usage.free / 1024 / 1024 / 1024
             
             if free_gb < 1:  # 1GB threshold
-                self.logger.warning(f"⚠️ Low disk space: {free_gb:.1f}GB")
+                self.logger.warning(f"WARNING: Low disk space: {free_gb:.1f}GB")
             
             # Check dynamic file system status
             try:
                 status = self.file_manager.get_current_date_folder_status()
                 current_files = status['csv_count']
                 
-                self.logger.info(f"📊 Health check - Files: {current_files}/{self.minimum_files_required}")
+                self.logger.info(f"DATA: Health check - Files: {current_files}/{self.minimum_files_required}")
                 
                 # Ensure minimum files if in business hours
                 if self.is_business_hours() and current_files < self.minimum_files_required:
@@ -511,27 +523,27 @@ class EnhancedWiFiServiceWithDynamicFiles:
                     self.ensure_minimum_files()
                     
             except Exception as e:
-                self.logger.error(f"❌ File system health check failed: {e}")
+                self.logger.error(f"ERROR: File system health check failed: {e}")
             
             self.last_health_check = current_time
-            self.logger.info("✅ Health check completed")
+            self.logger.info("SUCCESS: Health check completed")
             return True
             
         except Exception as e:
-            self.logger.error(f"❌ Health check failed: {e}")
+            self.logger.error(f"ERROR: Health check failed: {e}")
             return False
     
     def generate_excel_file(self):
         """Generate Excel file from CSV files and trigger VBS automation"""
         try:
-            self.logger.info("📊 Generating Excel file from CSV files...")
+            self.logger.info("DATA: Generating Excel file from CSV files...")
             
             # Check if we have enough files
             status = self.file_manager.get_current_date_folder_status()
             current_files = status['csv_count']
             
             if current_files < self.minimum_files_required:
-                self.logger.warning(f"⚠️ Not enough files for Excel generation: {current_files}/{self.minimum_files_required}")
+                self.logger.warning(f"WARNING: Not enough files for Excel generation: {current_files}/{self.minimum_files_required}")
                 return False
             
             # Generate Excel file
@@ -542,7 +554,7 @@ class EnhancedWiFiServiceWithDynamicFiles:
             
             if result.get('success', False):
                 excel_file = result.get('excel_file')
-                self.logger.info(f"✅ Excel file generated: {excel_file}")
+                self.logger.info(f"SUCCESS: Excel file generated: {excel_file}")
                 
                 # Mark Excel as generated today
                 self.excel_generated_today = True
@@ -557,11 +569,11 @@ class EnhancedWiFiServiceWithDynamicFiles:
                 
                 return True
             else:
-                self.logger.error("❌ Excel generation failed")
+                self.logger.error("ERROR: Excel generation failed")
                 return False
                 
         except Exception as e:
-            self.logger.error(f"❌ Excel generation error: {e}")
+            self.logger.error(f"ERROR: Excel generation error: {e}")
             return False
     
     def run_vbs_automation(self):
@@ -576,14 +588,14 @@ class EnhancedWiFiServiceWithDynamicFiles:
             if not self.vbs_controller.is_initialized:
                 init_result = self.vbs_controller.initialize()
                 if not init_result["success"]:
-                    self.logger.error(f"❌ VBS initialization failed: {init_result['error']}")
+                    self.logger.error(f"ERROR: VBS initialization failed: {init_result['error']}")
                     return False
             
             # Run complete VBS automation
             vbs_result = self.vbs_controller.run_complete_vbs_automation(date_folder)
             
             if vbs_result["success"]:
-                self.logger.info("✅ VBS automation completed successfully")
+                self.logger.info("SUCCESS: VBS automation completed successfully")
                 self.vbs_automation_completed_today = True
                 
                 # Send success notification with PDF
@@ -593,7 +605,7 @@ class EnhancedWiFiServiceWithDynamicFiles:
                 
                 return True
             else:
-                self.logger.error(f"❌ VBS automation failed: {vbs_result['errors']}")
+                self.logger.error(f"ERROR: VBS automation failed: {vbs_result['errors']}")
                 
                 # Send failure notification
                 self.email_service.send_vbs_failure_notification(vbs_result['errors'], date_folder)
@@ -601,7 +613,7 @@ class EnhancedWiFiServiceWithDynamicFiles:
                 return False
                 
         except Exception as e:
-            self.logger.error(f"❌ VBS automation error: {e}")
+            self.logger.error(f"ERROR: VBS automation error: {e}")
             
             # Send error notification
             self.email_service.send_vbs_error_notification(str(e))
@@ -613,7 +625,7 @@ class EnhancedWiFiServiceWithDynamicFiles:
         try:
             return self.vbs_controller.is_vbs_available()
         except Exception as e:
-            self.logger.error(f"❌ VBS status check failed: {e}")
+            self.logger.error(f"ERROR: VBS status check failed: {e}")
             return False
     
     def reset_daily_counters(self):
@@ -629,15 +641,15 @@ class EnhancedWiFiServiceWithDynamicFiles:
             # Create new daily folder
             self.create_daily_folder()
             
-            self.logger.info("✅ Daily counters reset successfully")
+            self.logger.info("SUCCESS: Daily counters reset successfully")
             
         except Exception as e:
-            self.logger.error(f"❌ Daily counter reset failed: {e}")
+            self.logger.error(f"ERROR: Daily counter reset failed: {e}")
     
     def schedule_tasks(self):
         """Schedule regular FAST tasks - DAY ONLY (no night downloads)"""
         try:
-            self.logger.info("🕐 Scheduling FAST daytime tasks only...")
+            self.logger.info("TIME: Scheduling FAST daytime tasks only...")
             
             # Clear existing jobs
             schedule.clear()
@@ -656,8 +668,8 @@ class EnhancedWiFiServiceWithDynamicFiles:
             # Schedule health checks
             schedule.every(5).minutes.do(self.health_check).tag('health')
             
-            self.logger.info("✅ FAST daytime tasks scheduled (NO NIGHT DOWNLOADS):")
-            self.logger.info("   🌅 Morning slot: 09:30 (09:30 AM) - FAST")
+            self.logger.info("SUCCESS: FAST daytime tasks scheduled (NO NIGHT DOWNLOADS):")
+            self.logger.info("   DAILY: Morning slot: 09:30 (09:30 AM) - FAST")
             self.logger.info("   🌞 Afternoon slot: 13:00 (1:00 PM) - FAST")
             self.logger.info("   🌞 Afternoon backup: 13:30 (1:30 PM) - FAST")
             self.logger.info("   🚫 Evening slots: DISABLED (no night downloads)")
@@ -665,13 +677,13 @@ class EnhancedWiFiServiceWithDynamicFiles:
             self.logger.info("   🏥 Health check: Every 5 minutes")
             
         except Exception as e:
-            self.logger.error(f"❌ Failed to schedule tasks: {e}")
+            self.logger.error(f"ERROR: Failed to schedule tasks: {e}")
             self.handle_crash(e, "Task scheduling")
     
     def add_temporary_schedule(self, time_str: str, description: str = "temporary"):
         """Add temporary FAST schedule for testing"""
         try:
-            self.logger.info(f"🧪 Adding temporary FAST schedule: {time_str} ({description})")
+            self.logger.info(f"TEST: Adding temporary FAST schedule: {time_str} ({description})")
             
             # Parse time
             current_time = datetime.now()
@@ -683,32 +695,32 @@ class EnhancedWiFiServiceWithDynamicFiles:
             # If time has passed today, schedule for tomorrow
             if test_time <= current_time:
                 test_time += timedelta(days=1)
-                self.logger.info(f"🕐 Time has passed today, scheduling for tomorrow: {test_time}")
+                self.logger.info(f"TIME: Time has passed today, scheduling for tomorrow: {test_time}")
             else:
-                self.logger.info(f"🕐 Scheduling for today: {test_time}")
+                self.logger.info(f"TIME: Scheduling for today: {test_time}")
             
             # Add temporary FAST schedule
             schedule.every().day.at(time_str).do(self.run_fast_wifi_download, f"temporary-{description}").tag('temporary')
             
-            self.logger.info(f"✅ Temporary FAST schedule added: {time_str}")
+            self.logger.info(f"SUCCESS: Temporary FAST schedule added: {time_str}")
             return True
             
         except Exception as e:
-            self.logger.error(f"❌ Failed to add temporary schedule: {e}")
+            self.logger.error(f"ERROR: Failed to add temporary schedule: {e}")
             return False
     
     def clear_temporary_schedules(self):
         """Clear all temporary schedules"""
         try:
             schedule.clear('temporary')
-            self.logger.info("✅ Temporary schedules cleared")
+            self.logger.info("SUCCESS: Temporary schedules cleared")
         except Exception as e:
-            self.logger.error(f"❌ Failed to clear temporary schedules: {e}")
+            self.logger.error(f"ERROR: Failed to clear temporary schedules: {e}")
     
     def start_service(self):
         """Start the enhanced FAST service"""
         try:
-            self.logger.info("🚀 Starting Enhanced FAST WiFi Automation Service...")
+            self.logger.info("START: Starting Enhanced FAST WiFi Automation Service...")
             
             self.running = True
             
@@ -730,9 +742,9 @@ class EnhancedWiFiServiceWithDynamicFiles:
             test_time = current_time + timedelta(minutes=2)
             test_time_str = test_time.strftime("%H:%M")
             self.add_temporary_schedule(test_time_str, "immediate-test")
-            self.logger.info(f"🧪 Added immediate FAST test schedule for {test_time_str}")
+            self.logger.info(f"TEST: Added immediate FAST test schedule for {test_time_str}")
             
-            self.logger.info("✅ Enhanced FAST WiFi Service started successfully")
+            self.logger.info("SUCCESS: Enhanced FAST WiFi Service started successfully")
             
             # Service loop
             while self.running:
@@ -748,13 +760,13 @@ class EnhancedWiFiServiceWithDynamicFiles:
                     self.running = False
                     break
                 except Exception as e:
-                    self.logger.error(f"❌ Service loop error: {e}")
+                    self.logger.error(f"ERROR: Service loop error: {e}")
                     self.handle_crash(e, "Service loop")
             
-            self.logger.info("✅ Enhanced FAST WiFi Service stopped")
+            self.logger.info("SUCCESS: Enhanced FAST WiFi Service stopped")
             
         except Exception as e:
-            self.logger.error(f"❌ Failed to start service: {e}")
+            self.logger.error(f"ERROR: Failed to start service: {e}")
             self.handle_crash(e, "Service startup")
     
     def stop_service(self):
@@ -766,10 +778,10 @@ class EnhancedWiFiServiceWithDynamicFiles:
             # Clear all schedules
             schedule.clear()
             
-            self.logger.info("✅ Enhanced FAST WiFi Service stopped successfully")
+            self.logger.info("SUCCESS: Enhanced FAST WiFi Service stopped successfully")
             
         except Exception as e:
-            self.logger.error(f"❌ Failed to stop service: {e}")
+            self.logger.error(f"ERROR: Failed to stop service: {e}")
     
     def get_service_status(self):
         """Get current service status"""
@@ -791,7 +803,7 @@ class EnhancedWiFiServiceWithDynamicFiles:
             return status
             
         except Exception as e:
-            self.logger.error(f"❌ Failed to get service status: {e}")
+            self.logger.error(f"ERROR: Failed to get service status: {e}")
             return {"error": str(e)}
 
 def main():
@@ -801,9 +813,9 @@ def main():
         startup_mode = "--startup" in sys.argv
         
         if startup_mode:
-            print("🚀 Starting Enhanced FAST WiFi Service in startup mode...")
+            print("START: Starting Enhanced FAST WiFi Service in startup mode...")
         else:
-            print("🚀 Starting Enhanced FAST WiFi Service in manual mode...")
+            print("START: Starting Enhanced FAST WiFi Service in manual mode...")
         
         # Create and start service
         service = EnhancedWiFiServiceWithDynamicFiles()
@@ -812,7 +824,7 @@ def main():
     except KeyboardInterrupt:
         print("\n🛑 Service interrupted by user")
     except Exception as e:
-        print(f"❌ Service failed to start: {e}")
+        print(f"ERROR: Service failed to start: {e}")
         import traceback
         traceback.print_exc()
 

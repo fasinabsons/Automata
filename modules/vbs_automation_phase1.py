@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-VBS Automation - Phase 1: Application Launch & Login (IMPROVED)
-Implements Task 1.1 and 1.2 from vbs_task_list.txt
-FIXES: Proper double-click for exe files and taskbar-then-Run button sequence
+VBS Automation - Phase 1: Enhanced Login System
+Optimized with process management, precise window detection, and robust input handling
 """
 
 import os
@@ -13,79 +12,52 @@ import subprocess
 import win32gui
 import win32con
 import win32api
-import pyautogui
+import win32process
+import psutil
+import re
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List, Any
 import traceback
-import cv2
-import numpy as np
-from PIL import ImageGrab
 
-# Disable pyautogui failsafe
-pyautogui.FAILSAFE = False
-pyautogui.PAUSE = 0.3
-
-class VBSPhase1_LaunchLogin_Improved:
-    """Phase 1: Application Launch & Login Implementation (IMPROVED)"""
+class VBSPhase1_Enhanced:
+    """Enhanced VBS Login with improved reliability and background operation"""
     
     def __init__(self):
         self.logger = self._setup_logging()
-        self.window_handle = None
+        self.window_handle: Optional[int] = None
+        self.vbs_process_id: Optional[int] = None
         
-        # Application paths (from task list)
+        # Application paths
         self.vbs_paths = [
             r"C:\Users\Lenovo\Music\moonflower\AbsonsItERP.exe - Shortcut.lnk",
             r"\\192.168.10.16\e\ArabianLive\ArabianLive_MoonFlower\AbsonsItERP.exe"
         ]
         
-        # Login credentials (from task list)
+        # Simple credentials - exactly as specified
         self.credentials = {
-            "dropdown_selection": "IT",
-            "date": "01/01/2023", 
-            "username": "Vj",
-            "password": ""  # No password required
+            "company": "IT",
+            "financial_year": "01/01/2023",
+            "username": "vj"
         }
         
-        # UI Coordinates (from clickcursor.txt - EXACT COORDINATES)
-        self.coordinates = {
-            # Login form coordinates (from clickcursor.txt)
-            "run_button": (1043, 608),             # Run button (popup permission)
-            "it_dropdown": (1054, 528),            # IT dropdown selection
-            "date_field": (1053, 565),             # Date field for 01/01/2023
-            "username_field": (929, 561),          # Username field for "Vj"
-            "ok_button": (897, 724),               # OK/Login button
-            
-            # Window detection area
-            "window_center": (960, 600),           # Center of application window
-            
-            # Taskbar coordinates (bottom of screen)
-            "taskbar_left": (200, 740),            # Left side of taskbar
-            "taskbar_center": (500, 740),          # Center of taskbar
-            "taskbar_right": (800, 740),           # Right side of taskbar
-        }
-        
-        # Timing configuration
+        # Timeouts and retry settings
         self.timeouts = {
-            "app_launch": 15,        # 15 seconds for app launch
-            "login": 5,              # 5 seconds for login completion
-            "element_wait": 2,       # 2 seconds between UI actions
-            "dropdown_wait": 1,      # 1 second for dropdown to open
-            "double_click_interval": 0.2,  # Interval between double clicks
-            "taskbar_wait": 1,       # Wait after taskbar click
-            "run_button_wait": 0.5,  # Wait after Run button click
+            "startup": 10,  # Reduced from 15 to 10 seconds
+            "login": 10,
+            "security_popup": 15
         }
         
-        # Background operation settings
-        self.preserve_user_context = True
-        self.user_active_window = None
-        self.vbs_window_handle = None
+        self.retry_settings = {
+            "max_retries": 3,
+            "retry_delay": 1.0
+        }
         
-        self.logger.info("VBS Phase 1 (Launch & Login) IMPROVED initialized")
+        self.logger.info("🚀 Enhanced VBS Login initialized")
     
     def _setup_logging(self) -> logging.Logger:
-        """Setup logging for Phase 1"""
-        logger = logging.getLogger("VBSPhase1_Improved")
+        """Setup enhanced logging"""
+        logger = logging.getLogger("VBSEnhanced")
         logger.setLevel(logging.INFO)
         
         if not logger.handlers:
@@ -96,626 +68,778 @@ class VBSPhase1_LaunchLogin_Improved:
         
         return logger
     
-    def task_1_1_launch_application_improved(self) -> Dict[str, any]:
-        """Task 1.1: Launch AbsonsItERP.exe application with PROPER left-click double-click"""
-        try:
-            self.logger.info("🚀 TASK 1.1: Launching AbsonsItERP application with LEFT-CLICK DOUBLE-CLICK...")
-            
-            # Check if application is already running
-            existing_window = self._find_vbs_window()
-            if existing_window:
-                self.logger.info("Application already running, using existing window")
-                self.window_handle = existing_window
-                # Ensure window is maximized and not minimized
-                win32gui.SetForegroundWindow(self.window_handle)
-                win32gui.ShowWindow(self.window_handle, win32con.SW_MAXIMIZE)
-                time.sleep(2)
-                return {"success": True, "message": "Using existing application window"}
-            
-            # Try each path until one works
-            for i, path in enumerate(self.vbs_paths):
-                try:
-                    self.logger.info(f"Attempting launch via path {i+1}: {path}")
-                    
-                    # Check if path exists
-                    if not os.path.exists(path):
-                        self.logger.warning(f"Path does not exist: {path}")
-                        continue
-                    
-                    # SAFE METHOD: Use proper left-click double-click (no deletion)
-                    self.logger.info("🎯 Using SAFE left-click double-click method...")
-                    success = self._safe_double_click_launch(path)
-                    
-                    if not success:
-                        self.logger.warning(f"Safe double-click failed for path {i+1}")
-                        continue
-                    
-                    # CRITICAL: Wait 10 seconds for application to start loading
-                    self.logger.info("⏳ Waiting 10 seconds for application to start loading...")
-                    time.sleep(10)
-                    
-                    # IMPROVED: Handle RUN popup with keyboard method
-                    self.logger.info("🔔 Handling RUN popup with keyboard method...")
-                    popup_handled = self._handle_run_popup_simple()
-                    if popup_handled:
-                        self.logger.info("✅ RUN popup handled successfully")
-                        # Wait additional time after popup
-                        time.sleep(3)
-                    
-                    # Now look for VBS window
-                    window_handle = self._find_vbs_window()
-                    if window_handle:
-                        self.window_handle = window_handle
-                        
-                        # CRITICAL: Ensure window is maximized and focused
-                        self.logger.info("📱 Maximizing and focusing VBS window...")
-                        win32gui.SetForegroundWindow(self.window_handle)
-                        win32gui.ShowWindow(self.window_handle, win32con.SW_MAXIMIZE)
-                        time.sleep(3)  # Wait for window to stabilize
-                        
-                        # Verify window is ready
-                        window_title = win32gui.GetWindowText(self.window_handle)
-                        self.logger.info(f"✅ Application launched successfully: {window_title}")
-                        
-                        return {
-                            "success": True, 
-                            "window_handle": window_handle,
-                            "launch_path": path,
-                            "window_title": window_title
-                        }
-                    
-                    self.logger.warning(f"Application window not found after launch via path {i+1}")
-                    
-                except Exception as e:
-                    self.logger.warning(f"Failed to launch via path {i+1}: {e}")
-                    continue
-            
-            return {"success": False, "error": "Failed to launch application via all available paths"}
-            
-        except Exception as e:
-            error_msg = f"Application launch failed: {e}"
-            self.logger.error(error_msg)
-            self.logger.error(traceback.format_exc())
-            return {"success": False, "error": error_msg}
+    def run_simple_login(self) -> Dict[str, Any]:
+        """Run the enhanced login process with retry logic"""
+        return self._execute_with_retry(
+            self._run_login_process,
+            max_retries=self.retry_settings['max_retries'],
+            delay=self.retry_settings['retry_delay']
+        )
     
-    def _safe_double_click_launch(self, file_path: str) -> bool:
-        """Safely launch application using left-click double-click (no deletion)"""
+    def _run_login_process(self) -> Dict[str, Any]:
+        """Internal login process"""
         try:
-            self.logger.info(f"🖱️ SAFE: Performing left-click double-click on: {file_path}")
+            self.logger.info("🎯 Starting ENHANCED VBS login")
             
-            # Method 1: Use subprocess with 'start' command (Windows native)
-            try:
-                import subprocess
-                result = subprocess.run(['start', '', file_path], shell=True, capture_output=True, text=True)
-                if result.returncode == 0:
-                    self.logger.info("✅ Successfully launched using subprocess start command")
-                    return True
-                else:
-                    self.logger.warning(f"Subprocess start failed: {result.stderr}")
-            except Exception as e:
-                self.logger.warning(f"Subprocess method failed: {e}")
-            
-            # Method 2: Use ShellExecute with 'open' verb (safest)
-            try:
-                import win32api
-                result = win32api.ShellExecute(0, 'open', file_path, '', '', 1)
-                if result > 32:  # Success codes are > 32
-                    self.logger.info("✅ Successfully launched using ShellExecute")
-                    return True
-                else:
-                    self.logger.warning(f"ShellExecute failed with code: {result}")
-            except Exception as e:
-                self.logger.warning(f"ShellExecute method failed: {e}")
-            
-            # Method 3: Fallback to os.startfile (but this might cause deletion)
-            try:
-                os.startfile(file_path)
-                self.logger.info("✅ Launched using os.startfile (fallback)")
-                return True
-            except Exception as e:
-                self.logger.warning(f"os.startfile fallback failed: {e}")
-            
-            return False
-            
-        except Exception as e:
-            self.logger.error(f"Safe double-click launch failed: {e}")
-            return False
-    
-    def _handle_run_popup_simple(self) -> bool:
-        """Simple keyboard method for RUN popup: Left Arrow + Enter"""
-        try:
-            self.logger.info("🔔 SIMPLE: Handling RUN popup with keyboard method (Left Arrow + Enter)...")
-            
-            # Wait a moment for popup to appear
-            time.sleep(2)
-            
-            # Simple keyboard method - much more reliable
-            self.logger.info("🎯 Using keyboard method: Left Arrow → Enter")
-            
-            try:
-                self.logger.info("Step 1: Pressing Left Arrow to navigate to Run button...")
-                pyautogui.press('left')
-                time.sleep(0.5)
-                
-                self.logger.info("Step 2: Pressing Enter to click Run button...")
-                pyautogui.press('enter')
-                time.sleep(2)
-                
-                self.logger.info("✅ Keyboard method completed (Left Arrow + Enter)")
-                return True
-                
-            except Exception as e:
-                self.logger.warning(f"Keyboard method failed: {e}")
-                
-                # Fallback: Just Enter
-                try:
-                    self.logger.info("Fallback: Trying just Enter key...")
-                    pyautogui.press('enter')
-                    time.sleep(2)
-                    return True
-                except:
-                    return False
-            
-        except Exception as e:
-            self.logger.error(f"Simple popup handling failed: {e}")
-            return False
-    
-    def _handle_popup_by_image(self) -> bool:
-        """Method 1: Image-based popup detection"""
-        try:
-            self.logger.info("Method 1: Image-based popup detection")
-            
-            # Check for run popup image
-            run_popup_image = "clicks/runpopup.png"
-            if not os.path.exists(run_popup_image):
-                return False
-            
-            # Take screenshot
-            screenshot = ImageGrab.grab()
-            screenshot_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
-            
-            # Load template
-            template = cv2.imread(run_popup_image)
-            if template is None:
-                return False
-            
-            # Template matching
-            result = cv2.matchTemplate(screenshot_cv, template, cv2.TM_CCOEFF_NORMED)
-            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-            
-            if max_val > 0.7:  # 70% confidence
-                self.logger.info(f"Run popup detected (confidence: {max_val:.2f})")
-                
-                # Calculate click position
-                template_h, template_w = template.shape[:2]
-                click_x = max_loc[0] + template_w // 2
-                click_y = max_loc[1] + template_h // 2
-                
-                # Click the detected run button
-                self._background_click(click_x, click_y)
-                return True
-            
-            return False
-            
-        except Exception as e:
-            self.logger.warning(f"Image detection failed: {e}")
-            return False
-    
-    def _handle_popup_by_window_activation(self) -> bool:
-        """Method 2: Window activation and click"""
-        try:
-            self.logger.info("Method 2: Window activation popup handling")
-            
-            # Find security/permission dialogs
-            popup_windows = self._find_security_dialogs()
-            
-            for hwnd, title in popup_windows:
-                try:
-                    self.logger.info(f"Found popup: {title}")
-                    
-                    # Temporarily activate popup
-                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                    win32gui.SetForegroundWindow(hwnd)
-                    time.sleep(0.5)
-                    
-                    # Click Run button on popup
-                    self._click_run_on_popup(hwnd)
-                    
-                    # Check if popup closed
-                    time.sleep(1)
-                    if not win32gui.IsWindowVisible(hwnd):
-                        self.logger.info("Popup closed successfully")
-                        return True
-                    
-                except Exception as e:
-                    self.logger.warning(f"Could not handle popup {title}: {e}")
-                    continue
-            
-            return False
-            
-        except Exception as e:
-            self.logger.warning(f"Window activation failed: {e}")
-            return False
-    
-    def _handle_popup_by_coordinates(self) -> bool:
-        """Method 3: Direct coordinate clicking"""
-        try:
-            self.logger.info("Method 3: Coordinate-based popup handling")
-            
-            # Find and activate VBS window
-            vbs_windows = self._find_vbs_windows()
-            if not vbs_windows:
-                return False
-            
-            vbs_hwnd = vbs_windows[0][0]
-            
-            # Temporarily activate VBS window
-            win32gui.ShowWindow(vbs_hwnd, win32con.SW_RESTORE)
-            win32gui.SetForegroundWindow(vbs_hwnd)
-            time.sleep(0.5)
-            
-            # Click Run button at exact coordinates
-            run_x, run_y = self.coordinates["run_button"]
-            
-            # Multiple rapid clicks
-            for i in range(3):
-                self._background_click(run_x, run_y)
-                time.sleep(0.3)
-                
-                # Check if login form appeared
-                if self._is_login_form_visible():
-                    self.logger.info(f"Login form appeared after click {i+1}")
-                    return True
-            
-            return False
-            
-        except Exception as e:
-            self.logger.warning(f"Coordinate handling failed: {e}")
-            return False
-    
-    def _handle_popup_by_taskbar_recovery(self) -> bool:
-        """Method 4: Taskbar recovery and click"""
-        try:
-            self.logger.info("Method 4: Taskbar recovery popup handling")
-            
-            # Find VBS in taskbar
-            vbs_windows = self._find_vbs_windows()
-            if not vbs_windows:
-                return False
-            
-            for hwnd, title in vbs_windows:
-                try:
-                    # Click on taskbar to restore
-                    self._click_taskbar_item(title)
-                    time.sleep(1)
-                    
-                    # Now click Run button
-                    run_x, run_y = self.coordinates["run_button"]
-                    self._background_click(run_x, run_y)
-                    time.sleep(0.5)
-                    
-                    # Check if login form appeared
-                    if self._is_login_form_visible():
-                        self.logger.info("Login form appeared after taskbar recovery")
-                        return True
-                    
-                except Exception as e:
-                    self.logger.warning(f"Taskbar recovery failed for {title}: {e}")
-                    continue
-            
-            return False
-            
-        except Exception as e:
-            self.logger.warning(f"Taskbar recovery failed: {e}")
-            return False
-    
-    def perform_login_sequence(self) -> bool:
-        """Perform VBS login sequence: IT dropdown → Date dropdown → Username → Password → Enter"""
-        try:
-            self.logger.info("🔐 Performing login sequence with correct field order...")
-            
-            # Find and activate VBS window
-            if not self.window_handle:
-                vbs_windows = self._find_vbs_windows()
-                if not vbs_windows:
-                    self.logger.error("No VBS windows found for login")
-                    return False
-                self.window_handle = vbs_windows[0][0]
-            
-            # Temporarily activate VBS window
-            win32gui.ShowWindow(self.window_handle, win32con.SW_RESTORE)
-            win32gui.SetForegroundWindow(self.window_handle)
-            time.sleep(2)
-            
-            # Login sequence in correct order
-            self.logger.info("📋 Starting login field sequence...")
-            
-            # 1st field: IT dropdown
-            self.logger.info("Step 1: Clicking IT dropdown...")
-            self._click_coordinate(self.coordinates["it_dropdown"])
-            time.sleep(0.5)
-            pyautogui.typewrite("IT")
-            time.sleep(0.5)
-            pyautogui.press('enter')  # Confirm dropdown selection
-            time.sleep(0.5)
-            
-            # 2nd field: Date dropdown (01/01/2023)
-            self.logger.info("Step 2: Clicking Date dropdown...")
-            self._click_coordinate(self.coordinates["date_field"])
-            time.sleep(0.5)
-            # Clear field first
-            pyautogui.hotkey('ctrl', 'a')
-            time.sleep(0.2)
-            pyautogui.typewrite("01/01/2023")
-            time.sleep(0.5)
-            
-            # 3rd field: Username (vj)
-            self.logger.info("Step 3: Clicking Username field...")
-            self._click_coordinate(self.coordinates["username_field"])
-            time.sleep(0.5)
-            # Clear field completely
-            pyautogui.hotkey('ctrl', 'a')
-            time.sleep(0.2)
-            pyautogui.press('delete')
-            time.sleep(0.2)
-            # Type username character by character
-            for char in "vj":
-                pyautogui.typewrite(char)
-                time.sleep(0.1)
-            time.sleep(0.5)
-            
-            # 4th field: Password (empty - just click to ensure it's empty)
-            self.logger.info("Step 4: Ensuring password field is empty...")
-            # Note: Password field coordinates might be near username, we'll use Tab to navigate
-            pyautogui.press('tab')
-            time.sleep(0.2)
-            # Clear password field
-            pyautogui.hotkey('ctrl', 'a')
-            time.sleep(0.2)
-            pyautogui.press('delete')
-            time.sleep(0.5)
-            
-            # Final step: Submit login (Enter key method)
-            self.logger.info("Step 5: Submitting login with Enter key...")
-            pyautogui.press('enter')
-            time.sleep(3)  # Wait for login to process
-            
-            self.logger.info("✅ Login sequence completed successfully!")
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Login sequence failed: {e}")
-            return False
-        
-        finally:
-            # Always restore user context
-            self.restore_user_context()
-    
-    def _find_vbs_windows(self):
-        """Find VBS application windows"""
-        try:
-            vbs_windows = []
-            
-            def enum_callback(hwnd, windows):
-                try:
-                    if win32gui.IsWindowVisible(hwnd):
-                        title = win32gui.GetWindowText(hwnd)
-                        if title and any(keyword in title.lower() for keyword in 
-                                       ['absons', 'erp', 'login', 'system', 'moonflower']):
-                            windows.append((hwnd, title))
-                except:
-                    pass
-                return True
-            
-            win32gui.EnumWindows(enum_callback, vbs_windows)
-            return vbs_windows
-            
-        except Exception as e:
-            self.logger.warning(f"VBS window detection failed: {e}")
-            return []
-    
-    def _find_vbs_window(self):
-        """Find single VBS application window (returns first match)"""
-        try:
-            vbs_windows = self._find_vbs_windows()
-            if vbs_windows:
-                return vbs_windows[0][0]  # Return first window handle
-            return None
-            
-        except Exception as e:
-            self.logger.warning(f"VBS window detection failed: {e}")
-            return None
-    
-    def _find_security_dialogs(self):
-        """Find security/permission dialog windows"""
-        try:
-            dialogs = []
-            
-            def enum_callback(hwnd, windows):
-                try:
-                    if win32gui.IsWindowVisible(hwnd):
-                        title = win32gui.GetWindowText(hwnd)
-                        class_name = win32gui.GetClassName(hwnd)
-                        
-                        # Security dialog indicators
-                        security_keywords = [
-                            'security', 'run', 'allow', 'permission', 'warning',
-                            'user account control', 'open file', 'confirm', 'publisher'
-                        ]
-                        
-                        if (any(keyword in title.lower() for keyword in security_keywords) or
-                            any(keyword in class_name.lower() for keyword in ['dialog', '#32770'])):
-                            windows.append((hwnd, title))
-                except:
-                    pass
-                return True
-            
-            win32gui.EnumWindows(enum_callback, dialogs)
-            return dialogs
-            
-        except Exception as e:
-            self.logger.warning(f"Security dialog detection failed: {e}")
-            return []
-    
-    def _background_click(self, x: int, y: int):
-        """Perform click while preserving user context"""
-        try:
-            # Save current cursor position
-            current_pos = win32gui.GetCursorPos()
-            
-            # Perform click
-            pyautogui.click(x, y, duration=0.1)
-            
-            # Restore cursor (always restore to be safe)
-            win32gui.SetCursorPos(current_pos)
-            
-        except Exception as e:
-            self.logger.warning(f"Background click failed: {e}")
-    
-    def _click_run_on_popup(self, hwnd: int):
-        """Click Run button on popup dialog"""
-        try:
-            # Get popup window rectangle
-            rect = win32gui.GetWindowRect(hwnd)
-            
-            # Calculate likely Run button positions
-            center_x = (rect[0] + rect[2]) // 2
-            center_y = (rect[1] + rect[3]) // 2
-            
-            # Try different positions where Run button might be
-            run_positions = [
-                (center_x, center_y + 20),      # Center-bottom
-                (center_x + 40, center_y + 20), # Right of center
-                (center_x - 40, center_y + 20), # Left of center
-            ]
-            
-            for x, y in run_positions:
-                self._background_click(x, y)
-                time.sleep(0.3)
-            
-        except Exception as e:
-            self.logger.warning(f"Popup click failed: {e}")
-    
-    def _click_taskbar_item(self, window_title: str):
-        """Click on taskbar item to restore window"""
-        try:
-            # This is a simplified approach - clicking on taskbar area
-            # In a real implementation, you'd need to find the exact taskbar button
-            taskbar_y = win32api.GetSystemMetrics(win32con.SM_CYSCREEN) - 40
-            taskbar_x = 100  # Approximate position
-            
-            self._background_click(taskbar_x, taskbar_y)
-            
-        except Exception as e:
-            self.logger.warning(f"Taskbar click failed: {e}")
-    
-    def _is_login_form_visible(self) -> bool:
-        """Check if VBS login form is visible"""
-        try:
-            vbs_windows = self._find_vbs_windows()
-            return len(vbs_windows) > 0
-        except:
-            return False
-    
-    def _click_coordinate(self, coordinate: Tuple[int, int]) -> bool:
-        """Click at specific coordinate using Windows API"""
-        try:
-            x, y = coordinate
-            
-            # Move cursor to position
-            win32api.SetCursorPos((x, y))
-            time.sleep(0.1)
-            
-            # Perform click using Windows API
-            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, x, y, 0, 0)
-            time.sleep(0.05)
-            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, x, y, 0, 0)
-            
-            self.logger.info(f"Clicked at coordinate: ({x}, {y})")
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Error clicking coordinate {coordinate}: {e}")
-            return False
-    
-    def preserve_user_context(self):
-        """Preserve user's current working context"""
-        try:
-            self.user_active_window = win32gui.GetForegroundWindow()
-            self.logger.info("User context preserved")
-        except Exception as e:
-            self.logger.warning(f"Could not preserve user context: {e}")
-    
-    def restore_user_context(self):
-        """Restore user's working context"""
-        try:
-            if hasattr(self, 'user_active_window') and self.user_active_window:
-                win32gui.SetForegroundWindow(self.user_active_window)
-                self.logger.info("User context restored")
-        except Exception as e:
-            self.logger.warning(f"Could not restore user context: {e}")
-    
-    def run_phase_1_complete(self) -> Dict[str, any]:
-        """Run complete Phase 1: Launch + Login"""
-        try:
-            self.logger.info("🚀 Starting Phase 1: Application Launch & Login (IMPROVED)")
-            
-            phase_result = {
+            result = {
                 "success": False,
-                "tasks_completed": [],
-                "errors": [],
-                "start_time": datetime.now().isoformat()
+                "start_time": datetime.now().isoformat(),
+                "errors": []
             }
             
-            # Task 1.1: Launch Application (IMPROVED)
-            launch_result = self.task_1_1_launch_application_improved()
-            if launch_result["success"]:
-                phase_result["tasks_completed"].append("1.1_launch_improved")
-                self.logger.info("✅ Task 1.1 completed: Application launched (IMPROVED)")
+            # Step 1: Check for existing VBS process
+            existing_pid = self._check_existing_vbs_process()
+            if existing_pid:
+                self.logger.info(f"✅ Using existing VBS process: {existing_pid}")
+                self.vbs_process_id = existing_pid
+                if not self._find_and_focus_vbs_window():
+                    result["errors"].append("Could not focus existing VBS window")
+                    return result
             else:
-                phase_result["errors"].append(f"Task 1.1 failed: {launch_result['error']}")
-                return phase_result
+                # Step 2: Launch VBS application
+                self.logger.info("🚀 Launching VBS application...")
+                launch_result = self._launch_vbs_enhanced()
+                
+                if not launch_result["success"]:
+                    result["errors"].append(f"Launch failed: {launch_result['error']}")
+                    return result
+                
+                self.logger.info("✅ VBS launched successfully")
+                
+                # Step 3: Wait for form to be ready
+                self.logger.info("⏳ Waiting for VBS form to be ready...")
+                time.sleep(self.timeouts["startup"])
+                
+                # Step 4: Find and focus VBS window
+                if not self._find_and_focus_vbs_window():
+                    result["errors"].append("Could not find or focus VBS window")
+                    return result
             
-            # Task 1.2: Login Sequence
-            login_result = self.perform_login_sequence()
-            if login_result:
-                phase_result["tasks_completed"].append("1.2_login")
-                self.logger.info("✅ Task 1.2 completed: Login successful")
-                phase_result["success"] = True
+            # Step 5: Execute login sequence
+            self.logger.info("📝 Executing enhanced login sequence...")
+            login_success = self._execute_intelligent_login()
+            
+            if login_success:
+                self.logger.info("🎉 Enhanced login completed successfully!")
+                result["success"] = True
             else:
-                phase_result["errors"].append("Task 1.2 failed: Login sequence failed")
-                return phase_result
+                result["errors"].append("Enhanced login sequence failed")
             
-            phase_result["end_time"] = datetime.now().isoformat()
-            self.logger.info("🎉 Phase 1 completed successfully! (IMPROVED)")
-            
-            return phase_result
+            result["end_time"] = datetime.now().isoformat()
+            return result
             
         except Exception as e:
-            error_msg = f"Phase 1 execution failed: {e}"
+            error_msg = f"Enhanced login failed: {e}"
             self.logger.error(error_msg)
-            phase_result["errors"].append(error_msg)
-            phase_result["end_time"] = datetime.now().isoformat()
-            return phase_result
+            result["errors"].append(error_msg)
+            return result
+    
+    def _check_existing_vbs_process(self) -> Optional[int]:
+        """Check if VBS is already running to avoid duplicate launches"""
+        try:
+            vbs_keywords = ['AbsonsItERP', 'arabian', 'moonflower']
+            
+            for proc in psutil.process_iter(['pid', 'name', 'exe']):
+                try:
+                    proc_info = proc.info
+                    if proc_info['name'] and proc_info['exe']:
+                        exe_lower = proc_info['exe'].lower()
+                        name_lower = proc_info['name'].lower()
+                        
+                        if any(keyword.lower() in exe_lower or keyword.lower() in name_lower 
+                               for keyword in vbs_keywords):
+                            self.logger.info(f"✅ Found existing VBS process: {proc_info['pid']}")
+                            return proc_info['pid']
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+            
+            return None
+        except Exception as e:
+            self.logger.warning(f"⚠️ Process check failed: {e}")
+            return None
+    
+    def _launch_vbs_enhanced(self) -> Dict[str, Any]:
+        """Enhanced VBS application launch with better error handling"""
+        try:
+            # Try each path
+            for i, path in enumerate(self.vbs_paths):
+                try:
+                    self.logger.info(f"📁 Trying path {i+1}: {path}")
+                    
+                    if not os.path.exists(path):
+                        self.logger.warning(f"❌ Path not found: {path}")
+                        continue
+                    
+                    # Launch application
+                    process = subprocess.Popen([path], shell=True)
+                    
+                    # Handle security popup if it appears
+                    if self._handle_security_popup_enhanced():
+                        self.logger.info("✅ Security popup handled")
+                    
+                    # Wait for VBS to start - reduced from 5 to 3 seconds
+                    time.sleep(3)
+                    
+                    # Check if VBS window appeared
+                    if self._check_vbs_window_exists():
+                        self.logger.info("✅ VBS window found")
+                        return {"success": True, "path": path}
+                    else:
+                        self.logger.warning(f"❌ VBS window not found for path {i+1}")
+                        continue
+                    
+                except Exception as e:
+                    self.logger.warning(f"❌ Path {i+1} failed: {e}")
+                    continue
+            
+            return {"success": False, "error": "All launch paths failed"}
+            
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _handle_security_popup_enhanced(self) -> bool:
+        """Enhanced security popup handling with multiple strategies"""
+        try:
+            self.logger.info("🔐 Enhanced security popup detection...")
+            
+            security_patterns = [
+                r'.*security.*warning.*',
+                r'.*open.*file.*security.*',
+                r'.*publisher.*cannot.*verified.*',
+                r'.*run.*anyway.*',
+                r'.*windows.*protected.*'
+            ]
+            
+            for attempt in range(self.timeouts["security_popup"]):
+                popup_found = False
+                
+                def enum_security_windows(hwnd, windows):
+                    try:
+                        if win32gui.IsWindowVisible(hwnd):
+                            title = win32gui.GetWindowText(hwnd).lower()
+                            class_name = win32gui.GetClassName(hwnd).lower()
+                            
+                            # Check patterns
+                            for pattern in security_patterns:
+                                if re.search(pattern, title, re.IGNORECASE):
+                                    windows.append((hwnd, title, 'title'))
+                                    return True
+                            
+                            # Check for security dialog classes
+                            security_classes = ['#32770', 'tooltips_class32', 'button']
+                            if any(sec_class in class_name for sec_class in security_classes):
+                                if any(word in title for word in ['security', 'warning', 'publisher']):
+                                    windows.append((hwnd, title, 'class'))
+                                    return True
+                    
+                    except Exception:
+                        pass
+                    return True
+                
+                security_windows = []
+                win32gui.EnumWindows(enum_security_windows, security_windows)
+                
+                if security_windows:
+                    popup_found = True
+                    self.logger.info(f"🔐 Security popup detected: {security_windows[0][1]}")
+                    
+                    hwnd = security_windows[0][0]
+                    
+                    # Strategy 1: Alt+R (Run)
+                    if self._try_security_bypass(hwnd, 'alt_r'):
+                        return True
+                    
+                    # Strategy 2: Enter key
+                    if self._try_security_bypass(hwnd, 'enter'):
+                        return True
+                
+                time.sleep(1)
+            
+            return not popup_found  # Success if no popup found
+            
+        except Exception as e:
+            self.logger.error(f"❌ Security popup handling failed: {e}")
+            return False
+    
+    def _try_security_bypass(self, hwnd: int, method: str) -> bool:
+        """Try different security bypass methods"""
+        try:
+            win32gui.SetForegroundWindow(hwnd)
+            time.sleep(0.3)
+            
+            if method == 'alt_r':
+                # Alt+R combination
+                win32api.keybd_event(win32con.VK_MENU, 0, 0, 0)
+                time.sleep(0.1)
+                win32api.keybd_event(ord('R'), 0, 0, 0)
+                time.sleep(0.1)
+                win32api.keybd_event(ord('R'), 0, win32con.KEYEVENTF_KEYUP, 0)
+                time.sleep(0.1)
+                win32api.keybd_event(win32con.VK_MENU, 0, win32con.KEYEVENTF_KEYUP, 0)
+                
+            elif method == 'enter':
+                # Simple Enter key
+                win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+                time.sleep(0.1)
+                win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+            
+            time.sleep(2)
+            
+            # Check if popup is gone
+            if not win32gui.IsWindow(hwnd) or not win32gui.IsWindowVisible(hwnd):
+                self.logger.info(f"✅ Security bypass successful: {method}")
+                return True
+                
+            return False
+            
+        except Exception as e:
+            self.logger.error(f"❌ Security bypass {method} failed: {e}")
+            return False
+    
+    def _check_vbs_window_exists(self) -> bool:
+        """Check if VBS window exists with precise filtering"""
+        try:
+            vbs_windows = self._get_vbs_windows_precise()
+            
+            if vbs_windows:
+                # Choose the best match - prefer login windows
+                best_window = None
+                for hwnd, title, process_id in vbs_windows:
+                    if 'login' in title.lower():
+                        best_window = (hwnd, title, process_id)
+                        break
+                
+                if not best_window:
+                    best_window = vbs_windows[0]
+                
+                self.window_handle = best_window[0]
+                self.vbs_process_id = best_window[2]
+                self.logger.info(f"✅ VBS window selected: '{best_window[1]}'")
+                return True
+            
+            self.logger.warning("❌ No VBS windows found")
+            return False
+            
+        except Exception as e:
+            self.logger.error(f"❌ Window check failed: {e}")
+            return False
+    
+    def _get_vbs_windows_precise(self) -> List[Tuple[int, str, int]]:
+        """Get VBS windows with precise filtering"""
+        vbs_windows = []
+        
+        def enum_callback(hwnd, windows):
+            try:
+                if not win32gui.IsWindowVisible(hwnd):
+                    return True
+                    
+                title = win32gui.GetWindowText(hwnd)
+                
+                # Get process info
+                _, process_id = win32process.GetWindowThreadProcessId(hwnd)
+                
+                try:
+                    process = psutil.Process(process_id)
+                    exe_path = process.exe().lower()
+                    
+                    # Strict VBS identification
+                    vbs_identifiers = [
+                        'absonsiterp.exe',
+                        'arabian',
+                        'moonflower'
+                    ]
+                    
+                    # Must match exe path AND have relevant window title
+                    if any(identifier in exe_path for identifier in vbs_identifiers):
+                        # Additional title validation
+                        title_lower = title.lower()
+                        valid_titles = ['login', 'absons', 'erp', 'arabian', 'user']
+                        
+                        if any(valid in title_lower for valid in valid_titles):
+                            windows.append((hwnd, title, process_id))
+                            
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+                    
+            except Exception:
+                pass
+            return True
+        
+        win32gui.EnumWindows(enum_callback, vbs_windows)
+        return vbs_windows
+    
+    def _find_and_focus_vbs_window(self) -> bool:
+        """Find and focus VBS window with background-friendly approach"""
+        try:
+            if not self.window_handle:
+                if not self._check_vbs_window_exists():
+                    return False
+            
+            # Focus window without disrupting other applications
+            if self.window_handle is not None:
+                return self._focus_window_background(self.window_handle)
+            else:
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"❌ Window focus failed: {e}")
+            return False
+    
+    def _focus_window_background(self, hwnd: int) -> bool:
+        """Focus window without disrupting other applications"""
+        try:
+            # Check if window is minimized
+            if win32gui.IsIconic(hwnd):
+                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                time.sleep(0.5)
+            
+            # Bring to front without stealing focus from other apps
+            win32gui.SetWindowPos(hwnd, win32con.HWND_TOP, 0, 0, 0, 0, 
+                                 win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_SHOWWINDOW)
+            
+            # Brief activation
+            win32gui.SetForegroundWindow(hwnd)
+            time.sleep(0.3)
+            
+            self.logger.info("✅ VBS window focused")
+            return True
+        except Exception as e:
+            self.logger.error(f"❌ Window focus failed: {e}")
+            return False
+    
+    def _execute_intelligent_login(self) -> bool:
+        """Execute login sequence using proper tab navigation"""
+        try:
+            self.logger.info("📝 Starting tab-based login sequence...")
+            
+            # Always use the reliable tab-based login method
+            return self._execute_simple_login_sequence()
+            
+        except Exception as e:
+            self.logger.error(f"❌ Login failed: {e}")
+            return False
+    
+    def _execute_simple_login_sequence(self) -> bool:
+        """Execute the simple login sequence with two cycles - clear first, then fill"""
+        try:
+            self.logger.info("📝 Starting two-cycle login sequence...")
+            self.logger.info("📝 Cycle structure: Password->OK->Cancel->Company->Financial Year->Username->Password (6 tabs)")
+            
+            # Make sure VBS window is active
+            if self.window_handle:
+                try:
+                    win32gui.SetForegroundWindow(self.window_handle)
+                    time.sleep(1)
+                except:
+                    pass
+            
+            # FIRST CYCLE: Clear all fields
+            self.logger.info("🧹 FIRST CYCLE: Clearing all fields...")
+            
+            # Tab 3 times to get to Company field (1st text field)
+            self.logger.info("📝 Tabbing 3 times: Password->OK->Cancel->Company...")
+            for i in range(3):
+                self._press_tab()
+                time.sleep(0.3)
+            
+            # Clear Company field
+            self.logger.info("🧹 Clearing Company field...")
+            self._clear_field_only()
+            time.sleep(0.3)
+            
+            # Tab 1 time to Financial Year field (2nd text field)
+            self.logger.info("📝 Tabbing 1 time: Company->Financial Year...")
+            self._press_tab()
+            time.sleep(0.3)
+            
+            # Clear Financial Year field
+            self.logger.info("🧹 Clearing Financial Year field...")
+            self._clear_field_only()
+            time.sleep(0.3)
+            
+            # Tab 1 time to Username field (3rd text field)
+            self.logger.info("📝 Tabbing 1 time: Financial Year->Username...")
+            self._press_tab()
+            time.sleep(0.3)
+            
+            # Clear Username field
+            self.logger.info("🧹 Clearing Username field...")
+            self._clear_field_only()
+            time.sleep(0.3)
+            
+            # Tab 1 time to Password field (complete cycle - 6 tabs total)
+            self.logger.info("📝 Tabbing 1 time: Username->Password (cycle complete)...")
+            self._press_tab()
+            time.sleep(0.3)
+            
+            self.logger.info("✅ First cycle completed - all fields cleared (6 tabs total)")
+            
+            # SECOND CYCLE: Fill all fields with data
+            self.logger.info("📝 SECOND CYCLE: Filling all fields with data...")
+            
+            # Tab 3 times to get back to Company field (1st text field)
+            self.logger.info("📝 Tabbing 3 times: Password->OK->Cancel->Company...")
+            for i in range(3):
+                self._press_tab()
+                time.sleep(0.3)
+            
+            # Type "IT" in Company field
+            self.logger.info("📝 Typing 'IT' in Company field...")
+            self._type_text_efficiently("IT")
+            time.sleep(0.5)
+            
+            # Tab 1 time to Financial Year field (2nd text field)
+            self.logger.info("📝 Tabbing 1 time: Company->Financial Year...")
+            self._press_tab()
+            time.sleep(0.3)
+            
+            # Type "01/01/2023" in Financial Year field
+            self.logger.info("📝 Typing '01/01/2023' in Financial Year field...")
+            self._type_text_efficiently("01/01/2023")
+            time.sleep(0.5)
+            
+            # Tab 1 time to Username field (3rd text field)
+            self.logger.info("📝 Tabbing 1 time: Financial Year->Username...")
+            self._press_tab()
+            time.sleep(0.3)
+            
+            # Type "vj" in Username field
+            self.logger.info("📝 Typing 'vj' in Username field...")
+            self._type_text_efficiently("vj")
+            time.sleep(0.5)
+            
+            self.logger.info("✅ Second cycle completed - all fields filled")
+            
+            # Tab 2 times to get to OK button (Username->Password->OK)
+            self.logger.info("📝 Tabbing 2 times: Username->Password->OK...")
+            self._press_tab()  # Username -> Password
+            time.sleep(0.3)
+            self._press_tab()  # Password -> OK
+            time.sleep(0.3)
+            
+            # Press Enter to login
+            self.logger.info("📝 Pressing Enter to login...")
+            self._press_enter()
+            time.sleep(3)
+            
+            # Check if login was successful
+            if self._check_login_success():
+                self.logger.info("🎉 Login successful!")
+                return True
+            
+            # If first attempt didn't work, try Enter again
+            self.logger.info("🔄 Trying Enter again...")
+            self._press_enter()
+            time.sleep(3)
+            
+            if self._check_login_success():
+                self.logger.info("🎉 Login successful with second Enter!")
+                return True
+            
+            self.logger.info("✅ Login sequence completed")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ Login sequence failed: {e}")
+            return False
+    
+    def _clear_field_only(self):
+        """Clear current field only - no typing"""
+        try:
+            # Strategy 1: Ctrl+A + Delete (most reliable)
+            self._press_ctrl_key('A')
+            time.sleep(0.15)
+            self._press_key(win32con.VK_DELETE)
+            time.sleep(0.15)
+            
+            # Strategy 2: Backup clearing with Ctrl+A + Backspace
+            self._press_ctrl_key('A')
+            time.sleep(0.1)
+            self._press_key(win32con.VK_BACK)
+            time.sleep(0.1)
+            
+            # Strategy 3: Clear any remaining content with Home + Shift+End + Delete
+            self._press_key(win32con.VK_HOME)
+            time.sleep(0.1)
+            win32api.keybd_event(win32con.VK_SHIFT, 0, 0, 0)
+            self._press_key(win32con.VK_END)
+            win32api.keybd_event(win32con.VK_SHIFT, 0, win32con.KEYEVENTF_KEYUP, 0)
+            time.sleep(0.1)
+            self._press_key(win32con.VK_DELETE)
+            time.sleep(0.1)
+            
+        except Exception as e:
+            self.logger.error(f"❌ Field clearing failed: {e}")
+    
+    def _clear_and_type(self, text: str):
+        """Clear current field and type new text with enhanced clearing"""
+        try:
+            # Enhanced field clearing with multiple strategies
+            self.logger.info(f"🧹 Clearing field and typing '{text}'...")
+            
+            # Strategy 1: Ctrl+A + Delete (most reliable)
+            self._press_ctrl_key('A')
+            time.sleep(0.15)  # Slightly longer wait for selection
+            self._press_key(win32con.VK_DELETE)
+            time.sleep(0.15)
+            
+            # Strategy 2: Backup clearing with Ctrl+A + Backspace
+            self._press_ctrl_key('A')
+            time.sleep(0.1)
+            self._press_key(win32con.VK_BACK)
+            time.sleep(0.1)
+            
+            # Strategy 3: Clear any remaining content with Home + Shift+End + Delete
+            self._press_key(win32con.VK_HOME)
+            time.sleep(0.1)
+            win32api.keybd_event(win32con.VK_SHIFT, 0, 0, 0)
+            self._press_key(win32con.VK_END)
+            win32api.keybd_event(win32con.VK_SHIFT, 0, win32con.KEYEVENTF_KEYUP, 0)
+            time.sleep(0.1)
+            self._press_key(win32con.VK_DELETE)
+            time.sleep(0.1)
+            
+            # Now type the new text
+            self._type_text_efficiently(text)
+            
+            self.logger.info(f"✅ Successfully cleared and typed '{text}'")
+            
+        except Exception as e:
+            self.logger.error(f"❌ Enhanced clear and type failed for '{text}': {e}")
+            # Fallback to simple typing
+            try:
+                self._type_text_efficiently(text)
+                self.logger.info(f"✅ Fallback typing successful for '{text}'")
+            except Exception as e2:
+                self.logger.error(f"❌ Fallback typing also failed: {e2}")
+    
+    def _press_ctrl_key(self, key_name: str):
+        """Press Ctrl+Key combination"""
+        try:
+            if key_name == 'A':
+                vk_code = ord('A')
+            elif key_name == 'HOME':
+                vk_code = win32con.VK_HOME
+            else:
+                vk_code = ord(key_name.upper())
+            
+            win32api.keybd_event(win32con.VK_CONTROL, 0, 0, 0)
+            win32api.keybd_event(vk_code, 0, 0, 0)
+            time.sleep(0.05)
+            win32api.keybd_event(vk_code, 0, win32con.KEYEVENTF_KEYUP, 0)
+            win32api.keybd_event(win32con.VK_CONTROL, 0, win32con.KEYEVENTF_KEYUP, 0)
+        except Exception as e:
+            self.logger.error(f"❌ Ctrl+{key_name} failed: {e}")
+    
+    def _smart_fill_current_field(self, text: str):
+        """Smart field filling - check if field has data, clear if needed, then type"""
+        try:
+            # First, select all text in current field to see what's there
+            self._press_ctrl_key('A')  # Ctrl+A to select all
+            time.sleep(0.1)
+            
+            # Now type the new text (this will replace any selected text)
+            self._type_text_efficiently(text)
+            
+            self.logger.info(f"✅ Filled field with '{text}'")
+            
+        except Exception as e:
+            self.logger.error(f"❌ Smart field filling failed for '{text}': {e}")
+    
+    def _type_text_efficiently(self, text: str):
+        """Type text efficiently character by character"""
+        try:
+            for char in text:
+                # Use VkKeyScan to get the correct virtual key code
+                vk_code = win32api.VkKeyScan(char)
+                if vk_code != -1:  # Valid character
+                    # Extract the virtual key code (low byte)
+                    key_code = vk_code & 0xFF
+                    # Check if shift is needed (high byte)
+                    shift_needed = (vk_code >> 8) & 1
+                    
+                    if shift_needed:
+                        win32api.keybd_event(win32con.VK_SHIFT, 0, 0, 0)
+                    
+                    win32api.keybd_event(key_code, 0, 0, 0)
+                    time.sleep(0.03)  # Slightly slower for reliability
+                    win32api.keybd_event(key_code, 0, win32con.KEYEVENTF_KEYUP, 0)
+                    
+                    if shift_needed:
+                        win32api.keybd_event(win32con.VK_SHIFT, 0, win32con.KEYEVENTF_KEYUP, 0)
+                    
+                    time.sleep(0.03)
+            
+        except Exception as e:
+            self.logger.error(f"❌ Efficient typing failed for '{text}': {e}")
+    
+    def _press_key(self, vk_code: int):
+        """Press a single key efficiently"""
+        try:
+            win32api.keybd_event(vk_code, 0, 0, 0)
+            time.sleep(0.05)
+            win32api.keybd_event(vk_code, 0, win32con.KEYEVENTF_KEYUP, 0)
+        except Exception as e:
+            self.logger.error(f"❌ Key press failed for {vk_code}: {e}")
+    
+    def _press_tab(self):
+        """Press Tab key efficiently"""
+        self._press_key(win32con.VK_TAB)
+    
+    def _press_enter(self):
+        """Press Enter key efficiently"""
+        self._press_key(win32con.VK_RETURN)
+    
+    def _press_shift_tab(self):
+        """Press Shift+Tab to go to previous field"""
+        try:
+            win32api.keybd_event(win32con.VK_SHIFT, 0, 0, 0)
+            win32api.keybd_event(win32con.VK_TAB, 0, 0, 0)
+            time.sleep(0.05)
+            win32api.keybd_event(win32con.VK_TAB, 0, win32con.KEYEVENTF_KEYUP, 0)
+            win32api.keybd_event(win32con.VK_SHIFT, 0, win32con.KEYEVENTF_KEYUP, 0)
+        except Exception as e:
+            self.logger.error(f"❌ Shift+Tab failed: {e}")
+    
+    def _press_alt_key(self, char: str):
+        """Press Alt+Key combination"""
+        try:
+            win32api.keybd_event(win32con.VK_MENU, 0, 0, 0)  # Alt down
+            win32api.keybd_event(ord(char.upper()), 0, 0, 0)
+            time.sleep(0.05)
+            win32api.keybd_event(ord(char.upper()), 0, win32con.KEYEVENTF_KEYUP, 0)
+            win32api.keybd_event(win32con.VK_MENU, 0, win32con.KEYEVENTF_KEYUP, 0)  # Alt up
+        except Exception as e:
+            self.logger.error(f"❌ Alt+{char} failed: {e}")
+    
+    def _press_space(self):
+        """Press Space key efficiently"""
+        self._press_key(win32con.VK_SPACE)
+    
+    def _check_login_success(self) -> bool:
+        """Check if login was successful"""
+        try:
+            if not self.window_handle:
+                return False
+            
+            # Check if window title changed
+            current_title = win32gui.GetWindowText(self.window_handle)
+            
+            # If title no longer contains "login", probably successful
+            if 'login' not in current_title.lower():
+                return True
+            
+            # Check for new windows
+            return self._check_for_main_window()
+            
+        except Exception as e:
+            self.logger.error(f"❌ Login success check failed: {e}")
+            return False
+    
+    def _check_for_main_window(self) -> bool:
+        """Check for main application window"""
+        try:
+            main_windows = []
+            
+            def enum_callback(hwnd, windows):
+                try:
+                    if win32gui.IsWindowVisible(hwnd):
+                        title = win32gui.GetWindowText(hwnd)
+                        if title:
+                            # Check if this belongs to our VBS process
+                            _, window_process_id = win32process.GetWindowThreadProcessId(hwnd)
+                            
+                            if window_process_id == self.vbs_process_id:
+                                # Look for main app indicators
+                                main_indicators = ['absons', 'erp', 'arabian']
+                                exclude_indicators = ['login', 'security']
+                                
+                                title_lower = title.lower()
+                                has_main = any(indicator in title_lower for indicator in main_indicators)
+                                has_exclude = any(indicator in title_lower for indicator in exclude_indicators)
+                                
+                                if has_main and not has_exclude:
+                                    windows.append((hwnd, title))
+                                    
+                except:
+                    pass
+                return True
+            
+            win32gui.EnumWindows(enum_callback, main_windows)
+            
+            if main_windows:
+                self.logger.info(f"✅ Main window found: {main_windows[0][1]}")
+                self.window_handle = main_windows[0][0]  # Update to main window
+                return True
+            
+            return False
+            
+        except Exception as e:
+            self.logger.error(f"❌ Main window check failed: {e}")
+            return False
+    
+    def _execute_with_retry(self, func, max_retries: int = 3, delay: float = 1.0):
+        """Execute function with retry logic"""
+        last_exception = None
+        
+        for attempt in range(max_retries):
+            try:
+                self.logger.info(f"🔄 Attempt {attempt + 1}/{max_retries}: {func.__name__}")
+                result = func()
+                
+                if result and result.get("success", False):
+                    self.logger.info(f"✅ {func.__name__} succeeded on attempt {attempt + 1}")
+                    return result
+                else:
+                    self.logger.warning(f"⚠️ {func.__name__} returned False on attempt {attempt + 1}")
+                    
+            except Exception as e:
+                last_exception = e
+                self.logger.warning(f"❌ {func.__name__} failed on attempt {attempt + 1}: {e}")
+            
+            if attempt < max_retries - 1:
+                time.sleep(delay * (attempt + 1))  # Exponential backoff
+        
+        self.logger.error(f"❌ {func.__name__} failed after {max_retries} attempts")
+        if last_exception:
+            raise last_exception
+        
+        return {"success": False, "errors": [f"Failed after {max_retries} attempts"]}
     
     def get_window_handle(self) -> Optional[int]:
         """Get current window handle"""
         return self.window_handle
+    
+    def get_process_id(self) -> Optional[int]:
+        """Get current process ID"""
+        return self.vbs_process_id
+
+# Maintain backward compatibility
+VBSPhase1_Simple = VBSPhase1_Enhanced
 
 # Test function
-def test_phase_1_improved():
-    """Test Phase 1 IMPROVED implementation"""
-    print("🧪 Testing VBS Phase 1: Launch & Login (IMPROVED)")
+def test_simple_login():
+    """Test the enhanced VBS login"""
+    print("🧪 Testing Enhanced VBS Login")
     print("=" * 60)
     
-    phase1 = VBSPhase1_LaunchLogin_Improved()
+    vbs_login = VBSPhase1_Enhanced()
     
-    # Test complete phase
-    print("\n1. Testing complete Phase 1 (improved)...")
-    phase_result = phase1.run_phase_1_complete()
-    print(f"   Phase 1 result: {phase_result}")
+    result = vbs_login.run_simple_login()
     
-    print("\n✅ Phase 1 IMPROVED testing completed")
+    print(f"\n📊 Results:")
+    print(f"   Success: {result['success']}")
+    print(f"   Errors: {result.get('errors', [])}")
+    print(f"   Window Handle: {vbs_login.get_window_handle()}")
+    print(f"   Process ID: {vbs_login.get_process_id()}")
+    
+    if result["success"]:
+        print("\n✅ Enhanced login completed!")
+    else:
+        print(f"\n❌ Enhanced login failed: {result.get('errors', [])}")
+    
+    print("\n" + "=" * 60)
+    print("Enhanced VBS Login Test Completed")
 
 if __name__ == "__main__":
-    test_phase_1_improved()
+    test_simple_login()

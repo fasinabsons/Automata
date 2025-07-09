@@ -84,7 +84,7 @@ class WiFiAutomationApp:
             self.logger.info(f"🚀 Executing WiFi download for {slot_name} slot")
             
             # Execute WiFi automation
-            result = self.wifi_app.run_corrected_automation()
+            result = self.wifi_app.run_robust_automation()
             
             if result.get("success", False):
                 files_downloaded = result.get("files_downloaded", 4)  # Default to 4 networks

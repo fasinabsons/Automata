@@ -185,7 +185,7 @@ WiFi Automation Status:
         try:
             # Test WiFi download
             self.logger.info("Testing WiFi download...")
-            wifi_result = self.wifi_app.run_corrected_automation()
+            wifi_result = self.wifi_app.run_robust_automation()
             
             if wifi_result.get('success', False):
                 self.logger.info("✅ WiFi download test passed")
@@ -240,7 +240,7 @@ WiFi Automation Status:
             self.ensure_session_access()
             
             # Run WiFi automation
-            result = self.wifi_app.run_corrected_automation()
+            result = self.wifi_app.run_robust_automation()
             
             if result.get('success', False):
                 files_downloaded = result.get('files_downloaded', 0)

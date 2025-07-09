@@ -1,0 +1,7 @@
+{
+  "timestamp": "2025-07-08T11:59:26.600928",
+  "crash_count": 1,
+  "context": "FAST WiFi download (temporary-immediate-test)",
+  "error": "'bool' object has no attribute 'get'",
+  "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\Lenovo\\Videos\\Automata\\enhanced_service_runner.py\", line 295, in run_fast_wifi_download\n    if result and result.get(\"success\"):\n                  ^^^^^^^^^^\nAttributeError: 'bool' object has no attribute 'get'\n"
+}
